@@ -1,4 +1,4 @@
-import { getCurrentProfile, getTransactions, getCategories, getDirectory } from '@/lib/data/dashboard';
+import { getCurrentProfile, getTransactions, getCategories, getDirectory, getGroups } from '@/lib/data/dashboard';
 import { TransactionsList } from '@/components/dashboard/TransactionsList';
 import { AddTransactionTrigger } from '@/components/dashboard/AddTransactionTrigger';
 import { DirectoryUser } from '@/lib/types';
@@ -7,10 +7,11 @@ export default async function TransactionsPage() {
   const profile = await getCurrentProfile();
   if (!profile) return null;
 
-  const [transactions, categories, directory] = await Promise.all([
+  const [transactions, categories, directory, groups] = await Promise.all([
     getTransactions(500),
     getCategories(),
     getDirectory(),
+    getGroups(),
   ]);
 
   return (
@@ -25,6 +26,7 @@ export default async function TransactionsPage() {
       <AddTransactionTrigger
         categories={categories}
         directory={directory as DirectoryUser[]}
+        groups={groups}
         currentUserId={profile.id}
       />
     </div>

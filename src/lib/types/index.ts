@@ -23,6 +23,7 @@ export interface Category {
 export interface Transaction {
   id: string;
   user_id: string;
+  group_id: string | null;
   kind: TransactionKind;
   category_id: string | null;
   amount: number;
@@ -33,6 +34,23 @@ export interface Transaction {
   is_split: boolean;
   created_at: string;
   category?: Category | null;
+}
+
+export interface Group {
+  id: string;
+  owner_id: string;
+  name: string;
+  emoji: string;
+  created_at: string;
+  members?: GroupMember[];
+}
+
+export interface GroupMember {
+  group_id: string;
+  user_id: string;
+  role: 'owner' | 'member';
+  created_at: string;
+  profile?: Profile;
 }
 
 export interface SplitShare {

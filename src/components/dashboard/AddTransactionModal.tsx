@@ -6,7 +6,7 @@ import { X, Plus, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils/format';
-import { Category, TransactionKind, DirectoryUser } from '@/lib/types';
+import { Category, TransactionKind, DirectoryUser, Group } from '@/lib/types';
 import { createTransaction } from '@/app/actions/transactions';
 
 const KIND_LABELS: Record<TransactionKind, string> = {
@@ -18,11 +18,13 @@ const KIND_LABELS: Record<TransactionKind, string> = {
 export function AddTransactionModal({
   categories,
   directory,
+  groups,
   currentUserId,
   onClose,
 }: {
   categories: Category[];
   directory: DirectoryUser[];
+  groups: Group[];
   currentUserId: string;
   onClose: () => void;
 }) {
@@ -32,6 +34,7 @@ export function AddTransactionModal({
   const [description, setDescription] = useState('');
   const [source, setSource] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
+  const [groupId, setGroupId] = useState<string>('');
   const [occurredOn, setOccurredOn] = useState(new Date().toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +49,11 @@ export function AddTransactionModal({
     [categories, kind]
   );
 
-  const otherUsers = directory.filter((u) => u.id !== currentUserId);
+  const selectedGroup = groups.find((group) => group.id === groupId);
+  const allowedMemberIds = selectedGroup?.members?.map((member) => member.user_id) ?? [];
+  const otherUsers = directory.filter((u) =>
+    u.id !== currentUserId && (!selectedGroup || allowedMemberIds.includes(u.id))
+  );
 
   function toggleFriend(id: string) {
     setSelectedFriends((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]));
@@ -90,6 +97,7 @@ export function AddTransactionModal({
 
       await createTransaction({
         kind,
+        groupId: groupId || null,
         categoryId: categoryId || null,
         amount: numAmount,
         description,
@@ -151,7 +159,7 @@ export function AddTransactionModal({
 
           <Input
             label="Description"
-            placeholder={kind === 'income' ? 'e.g. Invoice #204' : 'e.g. Lunch with client'}
+            placeholder={kind === 'income' ? 'e.g. Salary, refund, side income' : 'e.g. Dinner, cab, rent'}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
@@ -179,6 +187,26 @@ export function AddTransactionModal({
             </select>
           </div>
 
+          {groups.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-paper/70">Group</label>
+              <select
+                value={groupId}
+                onChange={(e) => {
+                  setGroupId(e.target.value);
+                  setSelectedFriends([]);
+                  setCustomAmounts({});
+                }}
+                className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+              >
+                <option value="">Personal / no group</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>{group.emoji} {group.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <Input
             label="Date"
             type="date"
@@ -188,18 +216,27 @@ export function AddTransactionModal({
           />
 
           {/* Split section — only for expenses */}
-          {kind === 'expense' && otherUsers.length > 0 && (
+          {kind === 'expense' && (
             <div className="border-t border-ink-border pt-4">
               <button
                 type="button"
                 onClick={() => setSplitEnabled(!splitEnabled)}
+                disabled={otherUsers.length === 0}
                 className="flex items-center gap-2 text-sm font-medium text-paper/80 mb-3"
               >
                 {splitEnabled ? <Minus size={16} className="text-emerald" /> : <Plus size={16} className="text-emerald" />}
                 Split this expense
               </button>
 
-              {splitEnabled && (
+              {otherUsers.length === 0 && (
+                <p className="text-xs text-paper/40">
+                  {selectedGroup
+                    ? 'Add friends to this group before splitting here.'
+                    : 'Friends appear here after they sign up. You can also make groups from the Groups tab.'}
+                </p>
+              )}
+
+              {splitEnabled && otherUsers.length > 0 && (
                 <div className="flex flex-col gap-3">
                   <div className="grid grid-cols-2 gap-2">
                     <button

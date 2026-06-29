@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { Profile, Transaction, SplitShare, Category, BalanceSummary, DashboardTotals } from '@/lib/types';
+import { Profile, Transaction, SplitShare, Category, BalanceSummary, DashboardTotals, Group } from '@/lib/types';
 
 export async function getCurrentProfile(): Promise<Profile | null> {
   const supabase = await createClient();
@@ -39,6 +39,23 @@ export async function getDirectory() {
   const supabase = await createClient();
   const { data } = await supabase.from('directory').select('*');
   return data ?? [];
+}
+
+export async function getGroups(): Promise<Group[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from('groups')
+    .select('*, members:group_members(*, profile:profiles(*))')
+    .order('created_at', { ascending: false });
+
+  if (!data) return [];
+
+  return (data as Group[]).filter((group) =>
+    group.owner_id === user.id || group.members?.some((member) => member.user_id === user.id)
+  );
 }
 
 export function computeTotals(transactions: Transaction[], splitShares: SplitShare[], userId: string): DashboardTotals {

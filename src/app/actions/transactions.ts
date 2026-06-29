@@ -11,6 +11,7 @@ export interface SplitInput {
 
 export async function createTransaction(input: {
   kind: TransactionKind;
+  groupId?: string | null;
   categoryId: string | null;
   amount: number;
   description: string;
@@ -28,6 +29,7 @@ export async function createTransaction(input: {
     .from('transactions')
     .insert({
       user_id: user.id,
+      ...(input.groupId ? { group_id: input.groupId } : {}),
       kind: input.kind,
       category_id: input.categoryId,
       amount: input.amount,
@@ -60,6 +62,45 @@ export async function createTransaction(input: {
   revalidatePath('/dashboard');
   revalidatePath('/dashboard/transactions');
   revalidatePath('/dashboard/splits');
+}
+
+export async function createGroup(input: {
+  name: string;
+  emoji: string;
+  memberIds: string[];
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const name = input.name.trim();
+  const emoji = input.emoji.trim() || '💸';
+  if (!name) throw new Error('Group name is required.');
+
+  const { data: group, error } = await supabase
+    .from('groups')
+    .insert({
+      owner_id: user.id,
+      name,
+      emoji,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  const uniqueMemberIds = [...new Set([user.id, ...input.memberIds])];
+  const memberRows = uniqueMemberIds.map((memberId) => ({
+    group_id: group.id,
+    user_id: memberId,
+    role: memberId === user.id ? 'owner' : 'member',
+  }));
+
+  const { error: memberError } = await supabase.from('group_members').insert(memberRows);
+  if (memberError) throw new Error(memberError.message);
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/groups');
 }
 
 export async function deleteTransaction(id: string) {

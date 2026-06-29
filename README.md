@@ -94,6 +94,10 @@ when Render is actually needed, see [`DEPLOYMENT.md`](DEPLOYMENT.md).
 - **Splitting** — when adding an expense, toggle "Split this expense," pick
   who was involved, and choose an equal split or type custom amounts per
   person. Balances update automatically.
+- **Groups** — create circles for trips, flatmates, couples, events, and friend
+  plans so split expenses stay organized.
+- **Installable web app** — add Ledger to a phone home screen from the browser
+  for a simple app-like experience.
 - **Balances** — a running tally of who owes you and who you owe, with a
   one-tap "Settle" action once someone pays you back (or vice versa).
 - **Dashboard** — monthly income, expenses, investments, and net cashflow at

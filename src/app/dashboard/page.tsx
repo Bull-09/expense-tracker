@@ -4,6 +4,7 @@ import {
   getTransactions,
   getSplitShares,
   getDirectory,
+  getGroups,
   computeTotals,
   computeBalances,
 } from '@/lib/data/dashboard';
@@ -20,11 +21,12 @@ export default async function DashboardPage() {
   const profile = await getCurrentProfile();
   if (!profile) return null;
 
-  const [categories, transactions, splitShares, directory] = await Promise.all([
+  const [categories, transactions, splitShares, directory, groups] = await Promise.all([
     getCategories(),
     getTransactions(),
     getSplitShares(),
     getDirectory(),
+    getGroups(),
   ]);
 
   const totals = computeTotals(transactions, splitShares, profile.id);
@@ -63,6 +65,7 @@ export default async function DashboardPage() {
       <AddTransactionTrigger
         categories={categories}
         directory={directory as DirectoryUser[]}
+        groups={groups}
         currentUserId={profile.id}
       />
     </div>

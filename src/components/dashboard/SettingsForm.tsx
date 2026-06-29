@@ -1,12 +1,16 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { Check, Copy, Share2 } from 'lucide-react';
+import { useEffect, useState, useTransition } from 'react';
+import { Check, Copy, Download, Share2, Smartphone } from 'lucide-react';
 import { Profile } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { updateBudget } from '@/app/actions/transactions';
 import { createClient } from '@/lib/supabase/client';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+}
 
 export function SettingsForm({ profile }: { profile: Profile }) {
   const supabase = createClient();
@@ -14,8 +18,27 @@ export function SettingsForm({ profile }: { profile: Profile }) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
-  const appUrl = typeof window === 'undefined' ? '' : window.location.origin;
-  const hasNativeShare = typeof navigator !== 'undefined' && 'share' in navigator;
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [appUrl, setAppUrl] = useState('');
+  const [hasNativeShare, setHasNativeShare] = useState(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setAppUrl(window.location.origin);
+      setHasNativeShare('share' in navigator);
+    });
+
+    function handleBeforeInstallPrompt(event: Event) {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -42,6 +65,12 @@ export function SettingsForm({ profile }: { profile: Profile }) {
     await navigator.clipboard.writeText(appUrl);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleInstall() {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    setInstallPrompt(null);
   }
 
   return (
@@ -78,6 +107,32 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             {copied ? <Check size={16} /> : hasNativeShare ? <Share2 size={16} /> : <Copy size={16} />}
             {copied ? 'Copied' : hasNativeShare ? 'Share' : 'Copy link'}
           </Button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-ink-border bg-ink-raised p-5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-gold/15 text-gold">
+            <Smartphone size={20} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold text-paper/60 uppercase tracking-wide">Install on phone</h2>
+            <p className="mt-2 text-sm text-paper/50">
+              Add Ledger to your home screen for an app-like launch, full-screen view, and quicker daily logging.
+            </p>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+              {installPrompt ? (
+                <Button type="button" variant="secondary" onClick={handleInstall}>
+                  <Download size={16} />
+                  Install app
+                </Button>
+              ) : (
+                <p className="rounded-lg border border-ink-border bg-ink px-3 py-2 text-sm text-paper/50">
+                  iPhone: open the live site in Safari, tap Share, then Add to Home Screen.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

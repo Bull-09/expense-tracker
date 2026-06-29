@@ -3,15 +3,17 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { AddTransactionModal } from './AddTransactionModal';
-import { Category, DirectoryUser } from '@/lib/types';
+import { Category, DirectoryUser, Group } from '@/lib/types';
 
 export function AddTransactionTrigger({
   categories,
   directory,
+  groups,
   currentUserId,
 }: {
   categories: Category[];
   directory: DirectoryUser[];
+  groups: Group[];
   currentUserId: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -29,6 +31,7 @@ export function AddTransactionTrigger({
         <AddTransactionModal
           categories={categories}
           directory={directory}
+          groups={groups}
           currentUserId={currentUserId}
           onClose={() => setOpen(false)}
         />

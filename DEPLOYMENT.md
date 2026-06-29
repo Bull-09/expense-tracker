@@ -89,7 +89,37 @@ After Vercel gives you a production URL, go back to Supabase:
 If email confirmation stays on, test a fresh signup after changing these URLs.
 Old confirmation emails may still point at `localhost:3000` and can be ignored.
 
-## 6. Share With Friends
+## 6. Apply App Updates
+
+If you already ran the original `supabase/schema.sql`, run this update file in
+Supabase SQL Editor:
+
+```txt
+supabase/updates/2026-06-29-groups.sql
+```
+
+It adds:
+
+- Groups for trips, flatmates, couples, and events
+- Group members
+- Optional group tagging on transactions
+- Row-level security for group access
+
+For a brand-new Supabase project, you can run the full `supabase/schema.sql`
+instead.
+
+## 7. Install On Phone
+
+Ledger is a PWA, so friends can use it like an app:
+
+- Android Chrome: open the Vercel URL, then tap Install when prompted or use
+  browser menu -> Add to Home screen.
+- iPhone Safari: open the Vercel URL, tap Share, then Add to Home Screen.
+
+It is not a native APK yet. A native APK can be made later with Capacitor, but
+the PWA is the fastest way to share it today.
+
+## 8. Share With Friends
 
 After Vercel finishes deploying:
 
@@ -97,11 +127,12 @@ After Vercel finishes deploying:
 2. Create or sign into your account.
 3. Go to Settings -> Share with friends.
 4. Copy or share the app link.
+5. Ask friends to install it from the browser if they want app-like access.
 
 Anyone who signs up with that link appears in the split picker, so shared
 expenses can be assigned to them.
 
-## 7. When Render Is Needed
+## 9. When Render Is Needed
 
 Do not deploy this current app to Render unless you specifically want to run
 Next.js as a Node server there. Vercel is the cleanest host for this project.
