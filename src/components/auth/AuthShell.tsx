@@ -22,7 +22,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           </p>
         </div>
 
-        <p className="text-paper/30 text-sm font-ledger">built for everyday money, by you</p>
+        <p className="text-paper/30 text-sm font-ledger">built for everyday money, by Nishant</p>
       </div>
 
       {/* Form panel */}
