@@ -76,7 +76,7 @@ repository" instructions if you don't have the `gh` CLI installed.)
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 4. Click **Deploy**. After a minute or two you'll get a live URL like
-   `expense-tracker-two-snowy-67.vercel.app`. That's the link you send to friends.
+   `mithuchitfund.vercel.app`. That's the link you send to friends.
 
 From now on, every time you push to GitHub, Vercel redeploys automatically.
 

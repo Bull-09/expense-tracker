@@ -78,10 +78,10 @@ After Vercel gives you a production URL, go back to Supabase:
 
 1. Authentication -> URL Configuration
 2. Set Site URL to your Vercel production URL, for example:
-   `https://expense-tracker-two-snowy-67.vercel.app`
+   `https://mithuchitfund.vercel.app`
 3. Add Redirect URLs:
    - `http://localhost:3000/**`
-   - `https://your-vercel-project.vercel.app/**`
+   - `https://mithuchitfund.vercel.app/**`
    - Any custom domain you add later, such as `https://expenses.example.com/**`
 4. If you want friends to sign up without waiting for email confirmation, go to
    Authentication -> Providers -> Email, turn off "Confirm email", and save.
