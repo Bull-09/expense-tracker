@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #0F1115;
+  --ink-raised: #161922;
+  --ink-border: #262B38;
+  --paper: #FAFAF7;
+  --paper-dim: #F0EEE7;
+  --emerald: #3F7A5C;
+  --emerald-soft: #DCEBE3;
+  --clay: #B5544B;
+  --clay-soft: #F3DDDA;
+  --slate: #6B7280;
+  --gold: #C99A3E;
+
+  --background: var(--ink);
+  --foreground: var(--paper);
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-ink-raised: var(--ink-raised);
+  --color-ink-border: var(--ink-border);
+  --color-paper: var(--paper);
+  --color-paper-dim: var(--paper-dim);
+  --color-emerald: var(--emerald);
+  --color-emerald-soft: var(--emerald-soft);
+  --color-clay: var(--clay);
+  --color-clay-soft: var(--clay-soft);
+  --color-slate: var(--slate);
+  --color-gold: var(--gold);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  --font-ledger: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+
+* {
+  border-color: var(--ink-border);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+}
+
+.font-ledger {
+  font-family: var(--font-ledger);
+  font-feature-settings: "tnum" 1, "zero" 1;
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--emerald);
+  color: var(--paper);
+}
+
+:focus-visible {
+  outline: 2px solid var(--emerald);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.thin-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--ink-border);
+  border-radius: 3px;
+}
