@@ -33,7 +33,7 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
           <div className="w-7 h-7 rounded-md bg-emerald flex items-center justify-center font-ledger text-sm font-bold">
             ₹
           </div>
-          <span className="font-semibold text-lg">Ledger</span>
+          <span className="font-semibold text-lg leading-tight">Mithu Chit Fund Tracker</span>
         </div>
 
         <nav className="flex flex-col gap-1 flex-1">
@@ -86,7 +86,7 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
           <div className="w-6 h-6 rounded-md bg-emerald flex items-center justify-center font-ledger text-xs font-bold">
             ₹
           </div>
-          <span className="font-semibold">Ledger</span>
+          <span className="font-semibold text-sm">Mithu Chit Fund Tracker</span>
         </div>
         <div
           className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"

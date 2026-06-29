@@ -1,4 +1,4 @@
-# Ledger — Expense Tracker
+# Mithu Chit Fund Tracker
 
 A personal and shared expense tracker: track income from multiple streams,
 expenses by category, investments, and split costs with friends — with simple
@@ -59,8 +59,8 @@ picker automatically.
 ```bash
 git init
 git add .
-git commit -m "Initial commit: Ledger expense tracker"
-gh repo create ledger-expense-tracker --private --source=. --push
+git commit -m "Initial commit: Mithu Chit Fund Tracker"
+gh repo create expense-tracker --private --source=. --push
 ```
 
 (Or create a new repo on github.com and follow its "push an existing
@@ -76,7 +76,7 @@ repository" instructions if you don't have the `gh` CLI installed.)
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 4. Click **Deploy**. After a minute or two you'll get a live URL like
-   `ledger-expense-tracker.vercel.app`. That's the link you send to friends.
+   `expense-tracker-two-snowy-67.vercel.app`. That's the link you send to friends.
 
 From now on, every time you push to GitHub, Vercel redeploys automatically.
 
@@ -96,7 +96,7 @@ when Render is actually needed, see [`DEPLOYMENT.md`](DEPLOYMENT.md).
   person. Balances update automatically.
 - **Groups** — create circles for trips, flatmates, couples, events, and friend
   plans so split expenses stay organized.
-- **Installable web app** — add Ledger to a phone home screen from the browser
+- **Installable web app** — add Mithu Chit Fund Tracker to a phone home screen from the browser
   for a simple app-like experience.
 - **Balances** — a running tally of who owes you and who you owe, with a
   one-tap "Settle" action once someone pays you back (or vice versa).

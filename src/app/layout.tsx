@@ -3,11 +3,11 @@ import { PwaRegister } from "@/components/PwaRegister";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Ledger — Personal & Shared Expense Tracker",
+  title: "Mithu Chit Fund Tracker",
   description: "Track income, expenses, investments, and shared costs with friends.",
   appleWebApp: {
     capable: true,
-    title: "Ledger",
+    title: "Mithu Chit Fund Tracker",
     statusBarStyle: "black-translucent",
   },
 };

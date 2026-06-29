@@ -1,13 +1,13 @@
 export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex">
-      {/* Brand panel — the ledger signature */}
+      {/* Brand panel */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 bg-ink-raised border-r border-ink-border">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-md bg-emerald flex items-center justify-center font-ledger text-sm font-bold">
             ₹
           </div>
-          <span className="font-semibold text-lg">Ledger</span>
+          <span className="font-semibold text-lg">Mithu Chit Fund Tracker</span>
         </div>
 
         <div>
@@ -17,7 +17,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
             <span className="text-clay">-18,230</span>
           </div>
           <p className="text-paper/50 text-lg max-w-md leading-relaxed">
-            Every rupee in, every rupee out, every rupee owed. One ledger
+            Every rupee in, every rupee out, every rupee owed. One tracker
             for your income, your expenses, and what you split with friends.
           </p>
         </div>
@@ -32,7 +32,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
             <div className="w-7 h-7 rounded-md bg-emerald flex items-center justify-center font-ledger text-sm font-bold">
               ₹
             </div>
-            <span className="font-semibold text-lg">Ledger</span>
+            <span className="font-semibold text-lg">Mithu Chit Fund Tracker</span>
           </div>
           {children}
         </div>

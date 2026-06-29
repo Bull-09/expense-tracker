@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ledger-shell-v1';
+const CACHE_NAME = 'mithu-chit-fund-tracker-shell-v1';
 const SHELL_ASSETS = ['/', '/login', '/signup', '/icon.svg', '/maskable-icon.svg'];
 
 self.addEventListener('install', (event) => {

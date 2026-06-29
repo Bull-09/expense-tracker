@@ -47,13 +47,13 @@ This folder is not a Git repo yet. From the project root:
 ```bash
 git init
 git add .
-git commit -m "Initial commit: Ledger expense tracker"
+git commit -m "Initial commit: Mithu Chit Fund Tracker"
 ```
 
 Then create a GitHub repo and push it. With GitHub CLI:
 
 ```bash
-gh repo create ledger-expense-tracker --private --source=. --push
+gh repo create expense-tracker --private --source=. --push
 ```
 
 ## 4. Deploy To Vercel
@@ -78,7 +78,7 @@ After Vercel gives you a production URL, go back to Supabase:
 
 1. Authentication -> URL Configuration
 2. Set Site URL to your Vercel production URL, for example:
-   `https://ledger-expense-tracker.vercel.app`
+   `https://expense-tracker-two-snowy-67.vercel.app`
 3. Add Redirect URLs:
    - `http://localhost:3000/**`
    - `https://your-vercel-project.vercel.app/**`
@@ -110,7 +110,7 @@ instead.
 
 ## 7. Install On Phone
 
-Ledger is a PWA, so friends can use it like an app:
+Mithu Chit Fund Tracker is a PWA, so friends can use it like an app:
 
 - Android Chrome: open the Vercel URL, then tap Install when prompted or use
   browser menu -> Add to Home screen.
