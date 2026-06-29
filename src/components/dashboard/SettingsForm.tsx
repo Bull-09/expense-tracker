@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { Check, Copy, Share2 } from 'lucide-react';
 import { Profile } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -12,6 +13,9 @@ export function SettingsForm({ profile }: { profile: Profile }) {
   const [budget, setBudget] = useState(profile.monthly_budget?.toString() ?? '');
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const appUrl = typeof window === 'undefined' ? '' : window.location.origin;
+  const hasNativeShare = typeof navigator !== 'undefined' && 'share' in navigator;
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -21,6 +25,23 @@ export function SettingsForm({ profile }: { profile: Profile }) {
       await updateBudget(value);
       setSaved(true);
     });
+  }
+
+  async function handleShare() {
+    if (!appUrl) return;
+
+    if (hasNativeShare) {
+      await navigator.share({
+        title: 'Join my Ledger',
+        text: 'Track shared expenses with me on Ledger.',
+        url: appUrl,
+      });
+      return;
+    }
+
+    await navigator.clipboard.writeText(appUrl);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
   }
 
   return (
@@ -42,6 +63,22 @@ export function SettingsForm({ profile }: { profile: Profile }) {
         <p className="text-xs text-paper/40">
           Name and email come from your account. Update them by signing in with a different provider, or contact yourself — you&apos;re the admin.
         </p>
+      </div>
+
+      <div className="rounded-xl border border-emerald/30 bg-emerald/5 p-5">
+        <h2 className="text-sm font-semibold text-emerald uppercase tracking-wide mb-2">Share with friends</h2>
+        <p className="text-sm text-paper/50 mb-4">
+          Send this link to people you split expenses with. Once they sign up, they&apos;ll appear in your split picker.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="min-w-0 flex-1 rounded-lg border border-ink-border bg-ink px-3 py-2 text-sm text-paper/70 truncate">
+            {appUrl || 'Your app link'}
+          </div>
+          <Button type="button" variant="secondary" onClick={handleShare} className="sm:w-auto">
+            {copied ? <Check size={16} /> : hasNativeShare ? <Share2 size={16} /> : <Copy size={16} />}
+            {copied ? 'Copied' : hasNativeShare ? 'Share' : 'Copy link'}
+          </Button>
+        </div>
       </div>
 
       <form onSubmit={handleSave} className="rounded-xl border border-ink-border bg-ink-raised p-5 flex flex-col gap-4">

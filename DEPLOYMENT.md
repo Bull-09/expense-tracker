@@ -83,8 +83,25 @@ After Vercel gives you a production URL, go back to Supabase:
    - `http://localhost:3000/**`
    - `https://your-vercel-project.vercel.app/**`
    - Any custom domain you add later, such as `https://expenses.example.com/**`
+4. If you want friends to sign up without waiting for email confirmation, go to
+   Authentication -> Providers -> Email, turn off "Confirm email", and save.
 
-## 6. When Render Is Needed
+If email confirmation stays on, test a fresh signup after changing these URLs.
+Old confirmation emails may still point at `localhost:3000` and can be ignored.
+
+## 6. Share With Friends
+
+After Vercel finishes deploying:
+
+1. Open the production Vercel URL.
+2. Create or sign into your account.
+3. Go to Settings -> Share with friends.
+4. Copy or share the app link.
+
+Anyone who signs up with that link appears in the split picker, so shared
+expenses can be assigned to them.
+
+## 7. When Render Is Needed
 
 Do not deploy this current app to Render unless you specifically want to run
 Next.js as a Node server there. Vercel is the cleanest host for this project.
