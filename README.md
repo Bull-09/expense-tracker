@@ -1,8 +1,8 @@
 # Ledger — Expense Tracker
 
-A personal and shared expense tracker built for freelancers: track income from
-multiple streams, expenses by category, investments, and split costs with
-friends — with simple rule-based suggestions, no AI API key required.
+A personal and shared expense tracker: track income from multiple streams,
+expenses by category, investments, and split costs with friends — with simple
+rule-based suggestions, no AI API key required.
 
 Built with **Next.js 16 (App Router)**, **Supabase** (Postgres + Auth), and
 **Tailwind CSS**. Fully responsive — works on phone and desktop.

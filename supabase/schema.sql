@@ -185,7 +185,7 @@ begin
     (new.id, 'Health', 'expense', '#B5544B', 'heart-pulse'),
     (new.id, 'Shopping', 'expense', '#B5544B', 'shopping-bag'),
     (new.id, 'Other Expense', 'expense', '#B5544B', 'circle'),
-    (new.id, 'Freelance Project', 'income', '#3F7A5C', 'briefcase'),
+    (new.id, 'Project Income', 'income', '#3F7A5C', 'briefcase'),
     (new.id, 'Retainer', 'income', '#3F7A5C', 'repeat'),
     (new.id, 'Consulting', 'income', '#3F7A5C', 'message-square'),
     (new.id, 'Other Income', 'income', '#3F7A5C', 'circle');

@@ -89,7 +89,7 @@ export function generateInsights(transactions: Transaction[]): Insight[] {
     }
   }
 
-  // 4. Income volatility check (freelance-specific)
+  // 4. Income volatility check
   const incomeTx = transactions.filter((t) => t.kind === 'income');
   const incomeByMonth = new Map<string, number>();
   for (const t of incomeTx) {

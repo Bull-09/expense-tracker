@@ -18,12 +18,11 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           </div>
           <p className="text-paper/50 text-lg max-w-md leading-relaxed">
             Every rupee in, every rupee out, every rupee owed. One ledger
-            for your freelance income, your expenses, and what you split
-            with friends.
+            for your income, your expenses, and what you split with friends.
           </p>
         </div>
 
-        <p className="text-paper/30 text-sm font-ledger">built for freelancers, by you</p>
+        <p className="text-paper/30 text-sm font-ledger">built for everyday money, by you</p>
       </div>
 
       {/* Form panel */}
