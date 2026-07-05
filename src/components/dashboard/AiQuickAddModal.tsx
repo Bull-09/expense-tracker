@@ -88,6 +88,19 @@ export function AiQuickAddModal({
     });
   }
 
+  async function readJsonResponse(response: Response) {
+    const text = await response.text();
+    if (!text) {
+      throw new Error(response.ok ? 'AI returned an empty response.' : `AI request failed (${response.status}).`);
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(response.ok ? 'AI returned an unreadable response.' : `AI request failed (${response.status}).`);
+    }
+  }
+
   async function parseWithText(text: string) {
     setError(null);
     setLoading(true);
@@ -97,7 +110,7 @@ export function AiQuickAddModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok) throw new Error(data.error ?? 'Could not parse this.');
       setTranscript(data.transcript);
       setDrafts(data.drafts ?? []);
@@ -119,7 +132,7 @@ export function AiQuickAddModal({
         method: 'POST',
         body: form,
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok) throw new Error(data.error ?? 'Could not parse your voice note.');
       setTranscript(data.transcript);
       setMessage(data.transcript);
