@@ -64,6 +64,7 @@ gh repo create expense-tracker --private --source=. --push
 4. Add these Environment Variables for Production, Preview, and Development:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `OPENAI_API_KEY`
 5. Deploy.
 
 Vercel build settings can stay at their defaults:
@@ -71,6 +72,11 @@ Vercel build settings can stay at their defaults:
 - Install Command: `npm install`
 - Build Command: `npm run build`
 - Output Directory: Next.js default
+
+Optional AI model overrides:
+
+- `OPENAI_TRANSCRIBE_MODEL`
+- `OPENAI_PARSE_MODEL`
 
 ## 5. Configure Supabase Auth URLs
 
