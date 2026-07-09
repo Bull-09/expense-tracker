@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useMemo, useTransition } from 'react';
-import { Transaction, TransactionKind } from '@/lib/types';
+import { Category, DirectoryUser, Group, Transaction, TransactionKind } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
 import { format } from 'date-fns';
-import { ArrowUpRight, ArrowDownRight, PiggyBank, Trash2 } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, PiggyBank, Pencil, Trash2 } from 'lucide-react';
 import { deleteTransaction } from '@/app/actions/transactions';
 import { cn } from '@/lib/utils/format';
+import { EditTransactionModal } from './EditTransactionModal';
 
 const kindConfig: Record<TransactionKind, { icon: typeof ArrowUpRight; color: string; sign: string }> = {
   income: { icon: ArrowUpRight, color: 'text-emerald', sign: '+' },
@@ -21,10 +22,23 @@ const FILTERS: { label: string; value: TransactionKind | 'all' }[] = [
   { label: 'Investment', value: 'investment' },
 ];
 
-export function TransactionsList({ transactions }: { transactions: Transaction[] }) {
+export function TransactionsList({
+  transactions,
+  categories,
+  directory,
+  groups,
+  currentUserId,
+}: {
+  transactions: Transaction[];
+  categories: Category[];
+  directory: DirectoryUser[];
+  groups: Group[];
+  currentUserId: string;
+}) {
   const [filter, setFilter] = useState<TransactionKind | 'all'>('all');
   const [isPending, startTransition] = useTransition();
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Transaction | null>(null);
 
   const filtered = useMemo(
     () => (filter === 'all' ? transactions : transactions.filter((t) => t.kind === filter)),
@@ -88,6 +102,13 @@ export function TransactionsList({ transactions }: { transactions: Transaction[]
                     {config.sign}{formatCurrency(t.amount, t.currency)}
                   </span>
                   <button
+                    onClick={() => setEditing(t)}
+                    className="text-paper/30 hover:text-emerald p-1"
+                    aria-label="Edit transaction"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
                     onClick={() => handleDelete(t.id)}
                     disabled={deleting}
                     className="text-paper/30 hover:text-clay p-1 disabled:opacity-40"
@@ -100,6 +121,16 @@ export function TransactionsList({ transactions }: { transactions: Transaction[]
             );
           })}
         </div>
+      )}
+      {editing && (
+        <EditTransactionModal
+          transaction={editing}
+          categories={categories}
+          directory={directory}
+          groups={groups}
+          currentUserId={currentUserId}
+          onClose={() => setEditing(null)}
+        />
       )}
     </div>
   );

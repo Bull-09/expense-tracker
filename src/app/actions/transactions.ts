@@ -72,6 +72,75 @@ export async function createTransaction(input: {
   revalidatePath('/dashboard/splits');
 }
 
+export async function updateTransaction(input: {
+  id: string;
+  kind: TransactionKind;
+  groupId?: string | null;
+  categoryId: string | null;
+  amount: number;
+  description: string;
+  source?: string;
+  occurredOn: string;
+  splits?: SplitInput[];
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  let categoryId = input.categoryId;
+  if (!categoryId) {
+    const { data: categories } = await supabase.from('categories').select('*');
+    const inferred = inferCategory(input.kind, `${input.description} ${input.source ?? ''}`, categories ?? []);
+    categoryId = inferred?.id ?? null;
+  }
+
+  const isSplit = input.kind === 'expense' && !!(input.splits && input.splits.length > 0);
+
+  const { error } = await supabase
+    .from('transactions')
+    .update({
+      group_id: input.groupId ?? null,
+      kind: input.kind,
+      category_id: categoryId,
+      amount: input.amount,
+      description: input.description,
+      source: input.kind === 'income' ? input.source ?? null : null,
+      occurred_on: input.occurredOn,
+      is_split: isSplit,
+    })
+    .eq('id', input.id)
+    .eq('user_id', user.id);
+
+  if (error) throw new Error(error.message);
+
+  const { error: deleteSplitError } = await supabase
+    .from('split_shares')
+    .delete()
+    .eq('transaction_id', input.id)
+    .eq('payer_id', user.id);
+  if (deleteSplitError) throw new Error(deleteSplitError.message);
+
+  if (isSplit && input.splits) {
+    const rows = input.splits
+      .filter((s) => s.userId !== user.id)
+      .map((s) => ({
+        transaction_id: input.id,
+        payer_id: user.id,
+        owed_by_id: s.userId,
+        amount: s.amount,
+      }));
+
+    if (rows.length > 0) {
+      const { error: splitError } = await supabase.from('split_shares').insert(rows);
+      if (splitError) throw new Error(splitError.message);
+    }
+  }
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/transactions');
+  revalidatePath('/dashboard/splits');
+}
+
 export async function createGroup(input: {
   name: string;
   emoji: string;

@@ -21,7 +21,13 @@ export default async function TransactionsPage() {
         <p className="text-paper/50 text-sm mt-1">Everything you&apos;ve logged, in one tracker.</p>
       </div>
 
-      <TransactionsList transactions={transactions} />
+      <TransactionsList
+        transactions={transactions}
+        categories={categories}
+        directory={directory as DirectoryUser[]}
+        groups={groups}
+        currentUserId={profile.id}
+      />
 
       <AddTransactionTrigger
         categories={categories}
