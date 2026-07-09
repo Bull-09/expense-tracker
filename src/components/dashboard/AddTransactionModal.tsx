@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils/format';
 import { Category, TransactionKind, DirectoryUser, Group } from '@/lib/types';
 import { createTransaction } from '@/app/actions/transactions';
+import { inferCategory } from '@/lib/categories/auto';
 
 const KIND_LABELS: Record<TransactionKind, string> = {
   expense: 'Expense',
@@ -34,6 +35,7 @@ export function AddTransactionModal({
   const [description, setDescription] = useState('');
   const [source, setSource] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
+  const [categoryTouched, setCategoryTouched] = useState(false);
   const [groupId, setGroupId] = useState<string>('');
   const [occurredOn, setOccurredOn] = useState(new Date().toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
@@ -48,6 +50,11 @@ export function AddTransactionModal({
     () => categories.filter((c) => c.kind === (kind === 'expense' || kind === 'investment' ? 'expense' : 'income')),
     [categories, kind]
   );
+  const suggestedCategory = useMemo(
+    () => inferCategory(kind, `${description} ${source}`, categories),
+    [categories, description, kind, source]
+  );
+  const effectiveCategoryId = categoryTouched ? categoryId : categoryId || suggestedCategory?.id || '';
 
   const selectedGroup = groups.find((group) => group.id === groupId);
   const allowedMemberIds = selectedGroup?.members?.map((member) => member.user_id) ?? [];
@@ -98,7 +105,7 @@ export function AddTransactionModal({
       await createTransaction({
         kind,
         groupId: groupId || null,
-        categoryId: categoryId || null,
+        categoryId: effectiveCategoryId || null,
         amount: numAmount,
         description,
         source: kind === 'income' ? source : undefined,
@@ -132,7 +139,7 @@ export function AddTransactionModal({
               <button
                 key={k}
                 type="button"
-                onClick={() => { setKind(k); setCategoryId(''); }}
+                onClick={() => { setKind(k); setCategoryId(''); setCategoryTouched(false); }}
                 className={cn(
                   'py-2 rounded-lg text-sm font-medium border transition-colors',
                   kind === k
@@ -176,8 +183,11 @@ export function AddTransactionModal({
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-paper/70">Category</label>
             <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
+              value={effectiveCategoryId}
+              onChange={(e) => {
+                setCategoryId(e.target.value);
+                setCategoryTouched(true);
+              }}
               className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
             >
               <option value="">Uncategorized</option>
@@ -185,6 +195,9 @@ export function AddTransactionModal({
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {!categoryTouched && suggestedCategory && (
+              <p className="text-xs text-emerald">Auto-selected: {suggestedCategory.name}</p>
+            )}
           </div>
 
           {groups.length > 0 && (

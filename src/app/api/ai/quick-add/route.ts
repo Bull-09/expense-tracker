@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { getCategories, getCurrentProfile, getDirectory, getGroups } from '@/lib/data/dashboard';
+import { inferCategory } from '@/lib/categories/auto';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -167,7 +168,7 @@ export async function POST(request: Request) {
       description: draft.description ?? '',
       source: draft.source ?? null,
       occurredOn: draft.occurredOn || today,
-      categoryId: draft.categoryId ?? null,
+      categoryId: draft.categoryId ?? inferCategory(draft.kind, `${draft.description ?? ''} ${draft.source ?? ''}`, categories)?.id ?? null,
       groupId: draft.groupId ?? null,
       split: draft.split ?? { enabled: false, mode: 'equal', peopleIds: [] },
       confidence: typeof draft.confidence === 'number' ? draft.confidence : 0.5,

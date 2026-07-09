@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { TransactionKind } from '@/lib/types';
+import { inferCategory } from '@/lib/categories/auto';
 
 export interface SplitInput {
   userId: string;
@@ -24,6 +25,13 @@ export async function createTransaction(input: {
   if (!user) throw new Error('Not authenticated');
 
   const isSplit = !!(input.splits && input.splits.length > 0);
+  let categoryId = input.categoryId;
+
+  if (!categoryId) {
+    const { data: categories } = await supabase.from('categories').select('*');
+    const inferred = inferCategory(input.kind, `${input.description} ${input.source ?? ''}`, categories ?? []);
+    categoryId = inferred?.id ?? null;
+  }
 
   const { data: transaction, error } = await supabase
     .from('transactions')
@@ -31,7 +39,7 @@ export async function createTransaction(input: {
       user_id: user.id,
       ...(input.groupId ? { group_id: input.groupId } : {}),
       kind: input.kind,
-      category_id: input.categoryId,
+      category_id: categoryId,
       amount: input.amount,
       description: input.description,
       source: input.source ?? null,
