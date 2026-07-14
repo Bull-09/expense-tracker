@@ -5,6 +5,8 @@ import {
   getSplitShares,
   getDirectory,
   getGroups,
+  getSubscriptions,
+  ensureDueSubscriptionTransactions,
   computeTotals,
   computeBalances,
 } from '@/lib/data/dashboard';
@@ -18,17 +20,21 @@ import { CategoryBreakdownChart } from '@/components/dashboard/CategoryBreakdown
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { AddTransactionTrigger } from '@/components/dashboard/AddTransactionTrigger';
 import { DirectoryUser } from '@/lib/types';
+import { SubscriptionBurnCard } from '@/components/dashboard/SubscriptionBurnCard';
 
 export default async function DashboardPage() {
   const profile = await getCurrentProfile();
   if (!profile) return null;
 
-  const [categories, transactions, splitShares, directory, groups] = await Promise.all([
+  await ensureDueSubscriptionTransactions();
+
+  const [categories, transactions, splitShares, directory, groups, subscriptions] = await Promise.all([
     getCategories(),
     getTransactions(),
     getSplitShares(),
     getDirectory(),
     getGroups(),
+    getSubscriptions(),
   ]);
 
   const totals = computeTotals(transactions, splitShares, profile.id);
@@ -56,6 +62,7 @@ export default async function DashboardPage() {
           <RecentTransactions transactions={transactions} />
         </div>
         <div className="flex flex-col gap-5">
+          <SubscriptionBurnCard subscriptions={subscriptions} />
           <EstimateCard estimate={estimate} />
           <BalancesCard
             balances={balances}

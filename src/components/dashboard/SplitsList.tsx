@@ -4,13 +4,15 @@ import { useState, useTransition } from 'react';
 import { SplitShare } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
 import { format } from 'date-fns';
-import { CheckCircle2 } from 'lucide-react';
-import { settleSplitShare } from '@/app/actions/transactions';
+import { Bell, CheckCircle2 } from 'lucide-react';
+import { recordSplitReminder, settleSplitShare } from '@/app/actions/transactions';
 import { cn } from '@/lib/utils/format';
 
 export function SplitsList({ splitShares, currentUserId }: { splitShares: SplitShare[]; currentUserId: string }) {
   const [isPending, startTransition] = useTransition();
   const [settlingId, setSettlingId] = useState<string | null>(null);
+  const [remindingId, setRemindingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [showSettled, setShowSettled] = useState(false);
 
   const visible = splitShares.filter((s) => (showSettled ? true : !s.settled));
@@ -20,6 +22,21 @@ export function SplitsList({ splitShares, currentUserId }: { splitShares: SplitS
     startTransition(async () => {
       await settleSplitShare(id);
       setSettlingId(null);
+    });
+  }
+
+  function handleRemind(id: string) {
+    setRemindingId(id);
+    setNotice(null);
+    startTransition(async () => {
+      try {
+        await recordSplitReminder(id);
+        setNotice('Reminder saved. Add email or WhatsApp later to send it automatically.');
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : 'Could not save reminder.');
+      } finally {
+        setRemindingId(null);
+      }
     });
   }
 
@@ -42,11 +59,18 @@ export function SplitsList({ splitShares, currentUserId }: { splitShares: SplitS
         {showSettled ? 'Hide settled' : 'Show settled'}
       </button>
 
+      {notice && (
+        <div className="rounded-lg border border-emerald/30 bg-emerald/10 px-3 py-2 text-sm text-emerald">
+          {notice}
+        </div>
+      )}
+
       <div className="rounded-xl border border-ink-border bg-ink-raised divide-y divide-ink-border">
         {visible.map((s) => {
           const youArePayer = s.payer_id === currentUserId;
           const otherPerson = youArePayer ? s.owed_by : s.payer;
           const settling = isPending && settlingId === s.id;
+          const reminding = isPending && remindingId === s.id;
 
           return (
             <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
@@ -73,14 +97,26 @@ export function SplitsList({ splitShares, currentUserId }: { splitShares: SplitS
                   {formatCurrency(s.amount)}
                 </span>
                 {!s.settled && (
-                  <button
-                    onClick={() => handleSettle(s.id)}
-                    disabled={settling}
-                    className="flex items-center gap-1 text-xs font-medium text-paper/50 hover:text-emerald disabled:opacity-40 border border-ink-border hover:border-emerald/40 rounded-lg px-2.5 py-1.5"
-                  >
-                    <CheckCircle2 size={14} />
-                    {settling ? 'Settling…' : 'Settle'}
-                  </button>
+                  <>
+                    {youArePayer && (
+                      <button
+                        onClick={() => handleRemind(s.id)}
+                        disabled={reminding}
+                        className="flex items-center gap-1 rounded-lg border border-ink-border px-2.5 py-1.5 text-xs font-medium text-paper/50 hover:border-gold/40 hover:text-gold disabled:opacity-40"
+                      >
+                        <Bell size={14} />
+                        {reminding ? 'Saving...' : 'Remind'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleSettle(s.id)}
+                      disabled={settling}
+                      className="flex items-center gap-1 text-xs font-medium text-paper/50 hover:text-emerald disabled:opacity-40 border border-ink-border hover:border-emerald/40 rounded-lg px-2.5 py-1.5"
+                    >
+                      <CheckCircle2 size={14} />
+                      {settling ? 'Settling...' : 'Settle'}
+                    </button>
+                  </>
                 )}
                 {s.settled && <span className="text-xs text-paper/30">Settled</span>}
               </div>

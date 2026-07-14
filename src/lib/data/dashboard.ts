@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
-import { Profile, Transaction, SplitShare, Category, BalanceSummary, DashboardTotals, Group } from '@/lib/types';
+import { addMonths, format, isAfter, parseISO } from 'date-fns';
+import { inferCategory } from '@/lib/categories/auto';
+import { Profile, Transaction, SplitShare, Category, BalanceSummary, DashboardTotals, Group, Subscription } from '@/lib/types';
 
 export async function getCurrentProfile(): Promise<Profile | null> {
   const supabase = await createClient();
@@ -20,10 +22,95 @@ export async function getTransactions(limit = 200): Promise<Transaction[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from('transactions')
-    .select('*, category:categories(*)')
+    .select('*, category:categories(*), subscription:subscriptions(*)')
     .order('occurred_on', { ascending: false })
     .limit(limit);
   return (data ?? []) as Transaction[];
+}
+
+export async function getSubscriptions(): Promise<Subscription[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('subscriptions')
+    .select('*, category:categories(*), group:groups(*)')
+    .order('active', { ascending: false })
+    .order('next_due_on', { ascending: true });
+  return (data ?? []) as Subscription[];
+}
+
+function dueDateForMonth(date: Date, billingDay: number) {
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  return new Date(date.getFullYear(), date.getMonth(), Math.min(billingDay, lastDay));
+}
+
+function nextMonthlyDue(currentDue: Date, billingDay: number) {
+  return dueDateForMonth(addMonths(currentDue, 1), billingDay);
+}
+
+export async function ensureDueSubscriptionTransactions(today = new Date()) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { data: subscriptions } = await supabase
+    .from('subscriptions')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('active', true)
+    .lte('next_due_on', format(today, 'yyyy-MM-dd'));
+
+  if (!subscriptions?.length) return;
+
+  const { data: categories } = await supabase.from('categories').select('*').eq('user_id', user.id);
+
+  for (const subscription of subscriptions as Subscription[]) {
+    let due = parseISO(subscription.next_due_on);
+    const rows = [];
+
+    while (!isAfter(due, today)) {
+      const occurredOn = format(due, 'yyyy-MM-dd');
+      rows.push({
+        user_id: user.id,
+        group_id: subscription.group_id,
+        subscription_id: subscription.id,
+        kind: 'expense',
+        category_id: subscription.category_id ?? inferCategory('expense', subscription.name, categories ?? [])?.id ?? null,
+        amount: subscription.amount,
+        currency: subscription.currency ?? 'INR',
+        description: `Subscription: ${subscription.name}`,
+        source: null,
+        occurred_on: occurredOn,
+        is_split: false,
+      });
+      due = nextMonthlyDue(due, subscription.billing_day);
+    }
+
+    if (rows.length > 0) {
+      const dueDates = rows.map((row) => row.occurred_on);
+      const { data: existing, error: existingError } = await supabase
+        .from('transactions')
+        .select('occurred_on')
+        .eq('user_id', user.id)
+        .eq('subscription_id', subscription.id)
+        .in('occurred_on', dueDates);
+      if (existingError) throw new Error(existingError.message);
+
+      const existingDates = new Set((existing ?? []).map((row) => row.occurred_on));
+      const missingRows = rows.filter((row) => !existingDates.has(row.occurred_on));
+
+      if (missingRows.length > 0) {
+        const { error } = await supabase.from('transactions').insert(missingRows);
+        if (error) throw new Error(error.message);
+      }
+    }
+
+    const { error: updateError } = await supabase
+      .from('subscriptions')
+      .update({ next_due_on: format(due, 'yyyy-MM-dd') })
+      .eq('id', subscription.id)
+      .eq('user_id', user.id);
+    if (updateError) throw new Error(updateError.message);
+  }
 }
 
 export async function getSplitShares(): Promise<SplitShare[]> {
@@ -123,4 +210,10 @@ export function computeBalances(splitShares: SplitShare[], userId: string): Bala
   }
 
   return [...map.values()].sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+}
+
+export function computeSubscriptionMonthlyTotal(subscriptions: Subscription[]) {
+  return subscriptions
+    .filter((subscription) => subscription.active)
+    .reduce((sum, subscription) => sum + subscription.amount, 0);
 }

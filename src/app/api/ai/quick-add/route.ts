@@ -23,6 +23,18 @@ type ParsedDraft = {
   questions?: string[];
 };
 
+type ParsedSubscriptionDraft = {
+  name: string;
+  amount: number | null;
+  billingDay?: number | null;
+  nextDueOn?: string | null;
+  categoryId?: string | null;
+  groupId?: string | null;
+  notes?: string | null;
+  confidence: number;
+  questions?: string[];
+};
+
 function jsonError(message: string, status = 400) {
   return Response.json({ error: message }, { status });
 }
@@ -42,7 +54,7 @@ function cheapReply(transcript: string) {
     return 'I am here. Type or speak a money note when ready.';
   }
   if (/\b(help|what can you do|how to use)\b/.test(text)) {
-    return 'Say things like “spent 250 on chai” or “got 5000 from dad”.';
+    return 'Say things like “spent 250 on chai”, “got 5000 from dad”, or “Netflix 499 monthly”.';
   }
   return null;
 }
@@ -146,6 +158,9 @@ export async function POST(request: Request) {
             'For equal splits, peopleIds should include only other people, not the current user.',
             'For custom splits, customAmounts are amounts owed by each other person.',
             'If the user mentions multiple unrelated money events, return multiple drafts.',
+            'If the user mentions subscriptions, recurring payments, renewals, EMI, rent, membership, or every month, return subscriptionDrafts.',
+            'Do not also create a normal expense draft for a subscription unless the user clearly says it was paid today.',
+            'For subscription billingDay, infer day of month if mentioned, otherwise use today day.',
             'If unsure, keep confidence lower and add short questions.',
           ].join('\n'),
         },
@@ -175,6 +190,19 @@ export async function POST(request: Request) {
                   questions: ['short confirmation questions if needed'],
                 },
               ],
+              subscriptionDrafts: [
+                {
+                  name: 'subscription or recurring bill name',
+                  amount: 'number or null',
+                  billingDay: '1 to 31 or null',
+                  nextDueOn: 'YYYY-MM-DD or null',
+                  categoryId: 'matching expense category id or null',
+                  groupId: 'matching group id or null',
+                  notes: 'short note or null',
+                  confidence: '0 to 1',
+                  questions: ['short confirmation questions if needed'],
+                },
+              ],
             },
           }),
         },
@@ -184,7 +212,7 @@ export async function POST(request: Request) {
     const content = completion.choices[0]?.message?.content;
     if (!content) return jsonError('AI did not return a draft.', 502);
 
-    const parsed = extractJson(content) as { reply?: string; drafts?: ParsedDraft[] };
+    const parsed = extractJson(content) as { reply?: string; drafts?: ParsedDraft[]; subscriptionDrafts?: ParsedSubscriptionDraft[] };
     const drafts = (parsed.drafts ?? []).map((draft) => ({
       kind: draft.kind,
       amount: typeof draft.amount === 'number' ? draft.amount : null,
@@ -197,11 +225,23 @@ export async function POST(request: Request) {
       confidence: typeof draft.confidence === 'number' ? draft.confidence : 0.5,
       questions: draft.questions ?? [],
     }));
+    const subscriptionDrafts = (parsed.subscriptionDrafts ?? []).map((draft) => ({
+      name: draft.name ?? '',
+      amount: typeof draft.amount === 'number' ? draft.amount : null,
+      billingDay: typeof draft.billingDay === 'number' ? Math.min(Math.max(Math.trunc(draft.billingDay), 1), 31) : new Date(today).getDate(),
+      nextDueOn: draft.nextDueOn || today,
+      categoryId: draft.categoryId ?? inferCategory('expense', draft.name ?? '', categories)?.id ?? null,
+      groupId: draft.groupId ?? null,
+      notes: draft.notes ?? null,
+      confidence: typeof draft.confidence === 'number' ? draft.confidence : 0.5,
+      questions: draft.questions ?? [],
+    }));
 
     return Response.json({
       transcript,
-      reply: parsed.reply ?? (drafts.length > 0 ? 'I made a draft. Review it before saving.' : 'Got it.'),
+      reply: parsed.reply ?? (drafts.length > 0 || subscriptionDrafts.length > 0 ? 'I made a draft. Review it before saving.' : 'Got it.'),
       drafts,
+      subscriptionDrafts,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'AI request failed.';

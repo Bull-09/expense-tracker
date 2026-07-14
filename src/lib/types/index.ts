@@ -24,6 +24,7 @@ export interface Transaction {
   id: string;
   user_id: string;
   group_id: string | null;
+  subscription_id: string | null;
   kind: TransactionKind;
   category_id: string | null;
   amount: number;
@@ -34,6 +35,25 @@ export interface Transaction {
   is_split: boolean;
   created_at: string;
   category?: Category | null;
+  subscription?: Subscription | null;
+}
+
+export interface Subscription {
+  id: string;
+  user_id: string;
+  group_id: string | null;
+  category_id: string | null;
+  name: string;
+  amount: number;
+  currency: string;
+  billing_day: number;
+  frequency: 'monthly';
+  next_due_on: string;
+  active: boolean;
+  notes: string | null;
+  created_at: string;
+  category?: Category | null;
+  group?: Group | null;
 }
 
 export interface Group {
@@ -65,6 +85,15 @@ export interface SplitShare {
   payer?: Profile;
   owed_by?: Profile;
   transaction?: Transaction;
+}
+
+export interface SplitReminder {
+  id: string;
+  split_share_id: string;
+  sender_id: string;
+  recipient_id: string;
+  message: string;
+  created_at: string;
 }
 
 export interface DirectoryUser {

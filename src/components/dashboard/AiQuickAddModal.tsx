@@ -1,11 +1,11 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Bot, Check, ChevronDown, ChevronUp, Loader2, Mic, Send, Square } from 'lucide-react';
+import { Bot, CalendarClock, Check, ChevronDown, ChevronUp, Loader2, Mic, Repeat2, Send, Square } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { createTransaction } from '@/app/actions/transactions';
+import { createSubscription, createTransaction } from '@/app/actions/transactions';
 import { Category, DirectoryUser, Group, TransactionKind } from '@/lib/types';
 import { cn } from '@/lib/utils/format';
 
@@ -23,6 +23,18 @@ type Draft = {
     peopleIds: string[];
     customAmounts?: Record<string, number>;
   };
+  confidence: number;
+  questions?: string[];
+};
+
+type SubscriptionDraft = {
+  name: string;
+  amount: number | null;
+  billingDay: number;
+  nextDueOn: string;
+  categoryId?: string | null;
+  groupId?: string | null;
+  notes?: string | null;
   confidence: number;
   questions?: string[];
 };
@@ -95,7 +107,9 @@ export function AiQuickAddModal({
     },
   ]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [subscriptionDrafts, setSubscriptionDrafts] = useState<SubscriptionDraft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState(0);
+  const [selectedSubscriptionDraft, setSelectedSubscriptionDraft] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [listening, setListening] = useState(false);
@@ -103,6 +117,7 @@ export function AiQuickAddModal({
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const draft = drafts[selectedDraft];
+  const subscriptionDraft = subscriptionDrafts[selectedSubscriptionDraft];
   const relevantCategories = useMemo(
     () => categories.filter((category) => category.kind === (draft?.kind === 'income' ? 'income' : 'expense')),
     [categories, draft?.kind]
@@ -112,6 +127,7 @@ export function AiQuickAddModal({
   const splitPeople = directory.filter((person) =>
     person.id !== currentUserId && (!selectedGroup || allowedMemberIds.includes(person.id))
   );
+  const expenseCategories = categories.filter((category) => category.kind === 'expense');
 
   function appendMessage(role: ChatMessage['role'], text: string) {
     setMessages((current) => [
@@ -123,6 +139,12 @@ export function AiQuickAddModal({
   function updateDraft(patch: Partial<Draft>) {
     setDrafts((current) =>
       current.map((item, index) => (index === selectedDraft ? { ...item, ...patch } : item))
+    );
+  }
+
+  function updateSubscriptionDraft(patch: Partial<SubscriptionDraft>) {
+    setSubscriptionDrafts((current) =>
+      current.map((item, index) => (index === selectedSubscriptionDraft ? { ...item, ...patch } : item))
     );
   }
 
@@ -173,7 +195,9 @@ export function AiQuickAddModal({
 
       appendMessage('assistant', data.reply ?? 'Done.');
       setDrafts(data.drafts ?? []);
+      setSubscriptionDrafts(data.subscriptionDrafts ?? []);
       setSelectedDraft(0);
+      setSelectedSubscriptionDraft(0);
     } catch (err) {
       const text = err instanceof Error ? err.message : 'Could not understand that.';
       setError(text);
@@ -263,9 +287,38 @@ export function AiQuickAddModal({
       }
       appendMessage('assistant', drafts.length === 1 ? 'Saved it.' : `Saved ${drafts.length} entries.`);
       setDrafts([]);
+      setSubscriptionDrafts([]);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save drafts.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveSubscriptionDrafts() {
+    setError(null);
+    setSaving(true);
+    try {
+      for (const item of subscriptionDrafts) {
+        if (!item.amount || item.amount <= 0) {
+          throw new Error('Every subscription needs a valid amount before saving.');
+        }
+        await createSubscription({
+          name: item.name,
+          amount: item.amount,
+          billingDay: item.billingDay,
+          nextDueOn: item.nextDueOn,
+          categoryId: item.categoryId ?? null,
+          groupId: item.groupId ?? null,
+          notes: item.notes,
+        });
+      }
+      appendMessage('assistant', subscriptionDrafts.length === 1 ? 'Subscription saved.' : `Saved ${subscriptionDrafts.length} subscriptions.`);
+      setSubscriptionDrafts([]);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save subscriptions.');
     } finally {
       setSaving(false);
     }
@@ -422,6 +475,87 @@ export function AiQuickAddModal({
 
                 <Button type="button" size="lg" onClick={saveDrafts} disabled={saving} className="mt-3 w-full">
                   {saving ? 'Saving...' : drafts.length === 1 ? 'Save draft' : `Save ${drafts.length} drafts`}
+                </Button>
+              </div>
+            )}
+
+            {subscriptionDrafts.length > 0 && subscriptionDraft && (
+              <div className="mb-3 rounded-xl border border-gold/30 bg-gold/10 p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold/15 text-gold">
+                      <Repeat2 size={16} />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Subscription draft</p>
+                      <p className="text-xs text-paper/45">Adds monthly expenses when due.</p>
+                    </div>
+                  </div>
+                  <CalendarClock size={17} className="text-paper/40" />
+                </div>
+
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {subscriptionDrafts.map((item, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => setSelectedSubscriptionDraft(index)}
+                      className={cn(
+                        'rounded-full border px-3 py-1 text-xs font-medium',
+                        selectedSubscriptionDraft === index ? 'border-gold bg-gold/15 text-gold' : 'border-ink-border text-paper/50'
+                      )}
+                    >
+                      Sub {index + 1}: {item.amount ? `₹${item.amount}` : 'Needs amount'}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Input label="Name" value={subscriptionDraft.name} onChange={(event) => updateSubscriptionDraft({ name: event.target.value })} />
+                  <Input label="Amount" type="number" min="0.01" step="0.01" value={subscriptionDraft.amount ?? ''} onChange={(event) => updateSubscriptionDraft({ amount: parseFloat(event.target.value) || null })} />
+                  <Input label="Billing day" type="number" min="1" max="31" value={subscriptionDraft.billingDay} onChange={(event) => updateSubscriptionDraft({ billingDay: parseInt(event.target.value, 10) || 1 })} />
+                  <Input label="Next due" type="date" value={subscriptionDraft.nextDueOn} onChange={(event) => updateSubscriptionDraft({ nextDueOn: event.target.value })} />
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-paper/70">Category</label>
+                    <select
+                      value={subscriptionDraft.categoryId ?? ''}
+                      onChange={(event) => updateSubscriptionDraft({ categoryId: event.target.value || null })}
+                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                    >
+                      <option value="">Auto category</option>
+                      {expenseCategories.map((category) => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {groups.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-paper/70">Group</label>
+                      <select
+                        value={subscriptionDraft.groupId ?? ''}
+                        onChange={(event) => updateSubscriptionDraft({ groupId: event.target.value || null })}
+                        className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                      >
+                        <option value="">Personal</option>
+                        {groups.map((group) => (
+                          <option key={group.id} value={group.id}>{group.emoji} {group.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <Input label="Notes" value={subscriptionDraft.notes ?? ''} onChange={(event) => updateSubscriptionDraft({ notes: event.target.value })} className="sm:col-span-2" />
+                </div>
+
+                {subscriptionDraft.questions && subscriptionDraft.questions.length > 0 && (
+                  <p className="mt-3 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-sm text-paper/70">
+                    {subscriptionDraft.questions.join(' ')}
+                  </p>
+                )}
+
+                <Button type="button" size="lg" onClick={saveSubscriptionDrafts} disabled={saving} className="mt-3 w-full">
+                  {saving ? 'Saving...' : subscriptionDrafts.length === 1 ? 'Save subscription' : `Save ${subscriptionDrafts.length} subscriptions`}
                 </Button>
               </div>
             )}

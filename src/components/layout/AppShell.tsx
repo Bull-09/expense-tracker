@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Receipt, Users, Settings, LogOut, Handshake } from 'lucide-react';
+import { LayoutDashboard, Receipt, Users, Settings, LogOut, Handshake, Repeat2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/dashboard/transactions', label: 'Transactions', icon: Receipt },
+  { href: '/dashboard/subscriptions', label: 'Subs', icon: Repeat2 },
   { href: '/dashboard/groups', label: 'Groups', icon: Users },
   { href: '/dashboard/splits', label: 'Splits', icon: Handshake },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },

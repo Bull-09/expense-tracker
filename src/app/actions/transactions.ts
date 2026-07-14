@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { TransactionKind } from '@/lib/types';
 import { inferCategory } from '@/lib/categories/auto';
+import { format } from 'date-fns';
 
 export interface SplitInput {
   userId: string;
@@ -70,6 +71,114 @@ export async function createTransaction(input: {
   revalidatePath('/dashboard');
   revalidatePath('/dashboard/transactions');
   revalidatePath('/dashboard/splits');
+}
+
+function nextDueDateFromBillingDay(billingDay: number, from = new Date()) {
+  const safeDay = Math.min(Math.max(Math.trunc(billingDay), 1), 31);
+  const thisMonthLastDay = new Date(from.getFullYear(), from.getMonth() + 1, 0).getDate();
+  const thisMonthDue = new Date(from.getFullYear(), from.getMonth(), Math.min(safeDay, thisMonthLastDay));
+  if (thisMonthDue >= new Date(from.toDateString())) return format(thisMonthDue, 'yyyy-MM-dd');
+
+  const nextMonthLastDay = new Date(from.getFullYear(), from.getMonth() + 2, 0).getDate();
+  return format(new Date(from.getFullYear(), from.getMonth() + 1, Math.min(safeDay, nextMonthLastDay)), 'yyyy-MM-dd');
+}
+
+export async function createSubscription(input: {
+  name: string;
+  amount: number;
+  billingDay: number;
+  categoryId?: string | null;
+  groupId?: string | null;
+  nextDueOn?: string | null;
+  notes?: string | null;
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const name = input.name.trim();
+  if (!name) throw new Error('Subscription name is required.');
+  if (!input.amount || input.amount <= 0) throw new Error('Subscription needs a valid amount.');
+
+  const billingDay = Math.min(Math.max(Math.trunc(input.billingDay || new Date().getDate()), 1), 31);
+  let categoryId = input.categoryId ?? null;
+
+  if (!categoryId) {
+    const { data: categories } = await supabase.from('categories').select('*').eq('user_id', user.id);
+    categoryId = inferCategory('expense', name, categories ?? [])?.id ?? null;
+  }
+
+  const { error } = await supabase.from('subscriptions').insert({
+    user_id: user.id,
+    group_id: input.groupId ?? null,
+    category_id: categoryId,
+    name,
+    amount: input.amount,
+    billing_day: billingDay,
+    next_due_on: input.nextDueOn || nextDueDateFromBillingDay(billingDay),
+    notes: input.notes?.trim() || null,
+  });
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/subscriptions');
+  revalidatePath('/dashboard/transactions');
+}
+
+export async function updateSubscription(input: {
+  id: string;
+  name: string;
+  amount: number;
+  billingDay: number;
+  categoryId?: string | null;
+  groupId?: string | null;
+  nextDueOn: string;
+  active: boolean;
+  notes?: string | null;
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const name = input.name.trim();
+  if (!name) throw new Error('Subscription name is required.');
+  if (!input.amount || input.amount <= 0) throw new Error('Subscription needs a valid amount.');
+
+  const billingDay = Math.min(Math.max(Math.trunc(input.billingDay), 1), 31);
+  const { error } = await supabase
+    .from('subscriptions')
+    .update({
+      group_id: input.groupId ?? null,
+      category_id: input.categoryId ?? null,
+      name,
+      amount: input.amount,
+      billing_day: billingDay,
+      next_due_on: input.nextDueOn,
+      active: input.active,
+      notes: input.notes?.trim() || null,
+    })
+    .eq('id', input.id)
+    .eq('user_id', user.id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/subscriptions');
+  revalidatePath('/dashboard/transactions');
+}
+
+export async function deleteSubscription(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { error } = await supabase.from('subscriptions').delete().eq('id', id).eq('user_id', user.id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/subscriptions');
+  revalidatePath('/dashboard/transactions');
 }
 
 export async function updateTransaction(input: {
@@ -196,6 +305,35 @@ export async function settleSplitShare(id: string) {
     .from('split_shares')
     .update({ settled: true, settled_at: new Date().toISOString() })
     .eq('id', id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/splits');
+}
+
+export async function recordSplitReminder(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data: share, error: shareError } = await supabase
+    .from('split_shares')
+    .select('*, transaction:transactions(description)')
+    .eq('id', id)
+    .eq('payer_id', user.id)
+    .single();
+
+  if (shareError) throw new Error(shareError.message);
+  if (!share) throw new Error('You can remind only people who owe you.');
+
+  const description = share.transaction?.description ?? 'split expense';
+  const { error } = await supabase.from('split_reminders').insert({
+    split_share_id: id,
+    sender_id: user.id,
+    recipient_id: share.owed_by_id,
+    message: `Reminder for ${description}`,
+  });
+
   if (error) throw new Error(error.message);
 
   revalidatePath('/dashboard');
