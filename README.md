@@ -98,6 +98,8 @@ when Render is actually needed, see [`DEPLOYMENT.md`](DEPLOYMENT.md).
   plans so split expenses stay organized.
 - **AI Quick Add** — speak or type a casual money note, review the AI draft,
   then save it as a transaction.
+- **Money forecast** — estimates monthly and yearly income/spend from your own
+  behavior without using AI tokens.
 - **Installable web app** — add Mithu Chit Fund Tracker to a phone home screen from the browser
   for a simple app-like experience.
 - **Balances** — a running tally of who owes you and who you owe, with a

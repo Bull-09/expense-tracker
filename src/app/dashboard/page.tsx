@@ -9,9 +9,11 @@ import {
   computeBalances,
 } from '@/lib/data/dashboard';
 import { generateInsights, generateBudgetInsight } from '@/lib/insights';
+import { estimateMoneyFlow } from '@/lib/forecast';
 import { SummaryStrip } from '@/components/dashboard/SummaryStrip';
 import { BalancesCard } from '@/components/dashboard/BalancesCard';
 import { InsightsCard } from '@/components/dashboard/InsightsCard';
+import { EstimateCard } from '@/components/dashboard/EstimateCard';
 import { CategoryBreakdownChart } from '@/components/dashboard/CategoryBreakdownChart';
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { AddTransactionTrigger } from '@/components/dashboard/AddTransactionTrigger';
@@ -31,6 +33,7 @@ export default async function DashboardPage() {
 
   const totals = computeTotals(transactions, splitShares, profile.id);
   const balances = computeBalances(splitShares, profile.id);
+  const estimate = estimateMoneyFlow(transactions);
 
   const insights = generateInsights(transactions);
   const budgetInsight = generateBudgetInsight(totals.totalExpense, profile.monthly_budget);
@@ -53,6 +56,7 @@ export default async function DashboardPage() {
           <RecentTransactions transactions={transactions} />
         </div>
         <div className="flex flex-col gap-5">
+          <EstimateCard estimate={estimate} />
           <BalancesCard
             balances={balances}
             totalOwedToYou={totals.totalOwedToYou}
