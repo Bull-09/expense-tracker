@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Bot, Check, Mic, Send, Square, Wand2, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronUp, Loader2, Mic, Send, Square } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -27,36 +27,80 @@ type Draft = {
   questions?: string[];
 };
 
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognition;
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+}
+
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: {
+    length: number;
+    [index: number]: {
+      isFinal: boolean;
+      [index: number]: { transcript: string };
+    };
+  };
+}
+
 const KIND_LABELS: Record<TransactionKind, string> = {
   expense: 'Expense',
   income: 'Income',
   investment: 'Investment',
 };
 
+function getSpeechRecognition() {
+  if (typeof window === 'undefined') return null;
+  const win = window as Window & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+  return win.SpeechRecognition ?? win.webkitSpeechRecognition ?? null;
+}
+
 export function AiQuickAddModal({
   categories,
   directory,
   groups,
   currentUserId,
-  onClose,
 }: {
   categories: Category[];
   directory: DirectoryUser[];
   groups: Group[];
   currentUserId: string;
-  onClose: () => void;
+  onClose?: () => void;
 }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
-  const [transcript, setTranscript] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: 'hello',
+      role: 'assistant',
+      text: 'Tell me naturally. I can chat, or make entries when you mention money.',
+    },
+  ]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [recording, setRecording] = useState(false);
+  const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const draft = drafts[selectedDraft];
   const relevantCategories = useMemo(
@@ -68,6 +112,13 @@ export function AiQuickAddModal({
   const splitPeople = directory.filter((person) =>
     person.id !== currentUserId && (!selectedGroup || allowedMemberIds.includes(person.id))
   );
+
+  function appendMessage(role: ChatMessage['role'], text: string) {
+    setMessages((current) => [
+      ...current.slice(-5),
+      { id: `${role}-${Date.now()}-${Math.random()}`, role, text },
+    ]);
+  }
 
   function updateDraft(patch: Partial<Draft>) {
     setDrafts((current) =>
@@ -101,78 +152,77 @@ export function AiQuickAddModal({
     }
   }
 
-  async function parseWithText(text: string) {
+  async function sendMessage(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || loading) return;
+
+    setOpen(true);
+    setMessage('');
     setError(null);
+    appendMessage('user', trimmed);
     setLoading(true);
+
     try {
       const response = await fetch('/api/ai/quick-add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: trimmed }),
       });
       const data = await readJsonResponse(response);
-      if (!response.ok) throw new Error(data.error ?? 'Could not parse this.');
-      setTranscript(data.transcript);
+      if (!response.ok) throw new Error(data.error ?? 'Could not understand that.');
+
+      appendMessage('assistant', data.reply ?? 'Done.');
       setDrafts(data.drafts ?? []);
       setSelectedDraft(0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not parse this.');
+      const text = err instanceof Error ? err.message : 'Could not understand that.';
+      setError(text);
+      appendMessage('assistant', text);
     } finally {
       setLoading(false);
     }
   }
 
-  async function parseWithAudio(audio: Blob) {
-    setError(null);
-    setLoading(true);
-    try {
-      const form = new FormData();
-      form.append('audio', audio, 'voice-note.webm');
-      const response = await fetch('/api/ai/quick-add', {
-        method: 'POST',
-        body: form,
-      });
-      const data = await readJsonResponse(response);
-      if (!response.ok) throw new Error(data.error ?? 'Could not parse your voice note.');
-      setTranscript(data.transcript);
-      setMessage(data.transcript);
-      setDrafts(data.drafts ?? []);
-      setSelectedDraft(0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not parse your voice note.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function startRecording() {
-    setError(null);
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setError('Voice recording is not supported in this browser.');
+  function toggleListening() {
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
       return;
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream);
-    chunksRef.current = [];
-    recorderRef.current = recorder;
+    const Recognition = getSpeechRecognition();
+    if (!Recognition) {
+      setError('Live voice typing is not supported here. Use phone keyboard dictation or type it.');
+      return;
+    }
 
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunksRef.current.push(event.data);
+    const recognition = new Recognition();
+    recognitionRef.current = recognition;
+    recognition.lang = 'en-IN';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    let finalText = message.trim();
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const chunk = event.results[index][0].transcript;
+        if (event.results[index].isFinal) {
+          finalText = `${finalText} ${chunk}`.trim();
+        } else {
+          interim += chunk;
+        }
+      }
+      setMessage(`${finalText} ${interim}`.trim());
     };
-    recorder.onstop = () => {
-      stream.getTracks().forEach((track) => track.stop());
-      const audio = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
-      if (audio.size > 0) void parseWithAudio(audio);
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => {
+      setListening(false);
+      setError('Voice typing stopped. Try again or type it.');
     };
-
-    recorder.start();
-    setRecording(true);
-  }
-
-  function stopRecording() {
-    recorderRef.current?.stop();
-    setRecording(false);
+    recognition.start();
+    setOpen(true);
+    setListening(true);
   }
 
   function togglePerson(id: string) {
@@ -193,9 +243,7 @@ export function AiQuickAddModal({
         }
 
         const split = item.split;
-        const equalShare = split?.peopleIds?.length
-          ? item.amount / (split.peopleIds.length + 1)
-          : 0;
+        const equalShare = split?.peopleIds?.length ? item.amount / (split.peopleIds.length + 1) : 0;
 
         await createTransaction({
           kind: item.kind,
@@ -208,15 +256,14 @@ export function AiQuickAddModal({
           splits: split?.enabled
             ? split.peopleIds.map((personId) => ({
                 userId: personId,
-                amount: split.mode === 'custom'
-                  ? split.customAmounts?.[personId] ?? 0
-                  : equalShare,
+                amount: split.mode === 'custom' ? split.customAmounts?.[personId] ?? 0 : equalShare,
               }))
             : undefined,
         });
       }
+      appendMessage('assistant', drafts.length === 1 ? 'Saved it.' : `Saved ${drafts.length} entries.`);
+      setDrafts([]);
       router.refresh();
-      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save drafts.');
     } finally {
@@ -225,197 +272,129 @@ export function AiQuickAddModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm p-0 sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-ink-border bg-ink-raised sm:max-w-2xl sm:rounded-2xl thin-scroll">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-ink-border bg-ink-raised px-5 py-4">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald/15 text-emerald">
-              <Bot size={18} />
+    <div className="fixed inset-x-0 bottom-16 z-30 px-3 lg:bottom-5 lg:left-64">
+      <div className="mx-auto flex max-w-3xl flex-col overflow-hidden rounded-2xl border border-ink-border bg-ink-raised/95 shadow-2xl shadow-black/30 backdrop-blur">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="flex items-center justify-between gap-3 border-b border-ink-border px-4 py-2.5 text-left"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald/15 text-emerald">
+              <Bot size={17} />
             </span>
-            <div>
-              <h2 className="font-semibold">AI Quick Add</h2>
-              <p className="text-xs text-paper/45">Speak naturally. Review before saving.</p>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold">Mithu AI</span>
+              <span className="block truncate text-xs text-paper/45">Lazy expense chat. Speak or type.</span>
+            </span>
+          </span>
+          {open ? <ChevronDown size={18} className="text-paper/40" /> : <ChevronUp size={18} className="text-paper/40" />}
+        </button>
+
+        {open && (
+          <div className="max-h-[58vh] overflow-y-auto p-3 thin-scroll">
+            <div className="mb-3 flex flex-col gap-2">
+              {messages.map((item) => (
+                <div
+                  key={item.id}
+                  className={cn(
+                    'max-w-[85%] rounded-2xl px-3 py-2 text-sm',
+                    item.role === 'user'
+                      ? 'ml-auto bg-emerald text-paper'
+                      : 'mr-auto bg-ink text-paper/75'
+                  )}
+                >
+                  {item.text}
+                </div>
+              ))}
+              {loading && (
+                <div className="mr-auto flex items-center gap-2 rounded-2xl bg-ink px-3 py-2 text-sm text-paper/50">
+                  <Loader2 size={14} className="animate-spin" />
+                  Thinking
+                </div>
+              )}
             </div>
-          </div>
-          <button onClick={onClose} className="p-1 text-paper/50 hover:text-paper">
-            <X size={20} />
-          </button>
-        </div>
 
-        <div className="flex flex-col gap-5 p-5">
-          <div className="rounded-xl border border-ink-border bg-ink p-4">
-            <label htmlFor="ai-message" className="text-sm font-medium text-paper/70">
-              Tell Mithu what happened
-            </label>
-            <textarea
-              id="ai-message"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="e.g. Spent 850 on dinner yesterday, split equally with Rahul and Ananya"
-              className="mt-2 min-h-24 w-full resize-none rounded-lg border border-ink-border bg-ink-raised px-3 py-2.5 text-sm text-paper placeholder:text-paper/30 focus:border-emerald/60 focus:outline-none focus:ring-2 focus:ring-emerald/60"
-            />
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <Button type="button" onClick={() => parseWithText(message)} disabled={loading || !message.trim()}>
-                <Wand2 size={16} />
-                {loading ? 'Thinking...' : 'Make draft'}
-              </Button>
-              <Button
-                type="button"
-                variant={recording ? 'danger' : 'secondary'}
-                onClick={recording ? stopRecording : startRecording}
-                disabled={loading}
-              >
-                {recording ? <Square size={16} /> : <Mic size={16} />}
-                {recording ? 'Stop recording' : 'Voice note'}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => parseWithText('Spent 250 on chai today')}
-                disabled={loading}
-              >
-                <Send size={16} />
-                Try sample
-              </Button>
-            </div>
-            {transcript && (
-              <p className="mt-3 rounded-lg bg-emerald/10 px-3 py-2 text-xs text-paper/60">
-                Heard: {transcript}
-              </p>
-            )}
-          </div>
-
-          {drafts.length > 0 && draft && (
-            <div className="rounded-xl border border-emerald/30 bg-emerald/5 p-4">
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                {drafts.map((item, index) => (
-                  <button
-                    key={index}
-                    type="button"
-                    onClick={() => setSelectedDraft(index)}
-                    className={cn(
-                      'rounded-full border px-3 py-1.5 text-xs font-medium',
-                      selectedDraft === index
-                        ? 'border-emerald bg-emerald/15 text-emerald'
-                        : 'border-ink-border text-paper/50'
-                    )}
-                  >
-                    Draft {index + 1}: {item.amount ? `₹${item.amount}` : 'Needs amount'}
-                  </button>
-                ))}
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2 grid grid-cols-3 gap-2">
-                  {(Object.keys(KIND_LABELS) as TransactionKind[]).map((kind) => (
+            {drafts.length > 0 && draft && (
+              <div className="mb-3 rounded-xl border border-emerald/30 bg-emerald/5 p-3">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {drafts.map((item, index) => (
                     <button
-                      key={kind}
+                      key={index}
                       type="button"
-                      onClick={() => updateDraft({ kind, categoryId: null })}
+                      onClick={() => setSelectedDraft(index)}
                       className={cn(
-                        'rounded-lg border py-2 text-sm font-medium',
-                        draft.kind === kind
-                          ? 'border-emerald bg-emerald/15 text-emerald'
-                          : 'border-ink-border text-paper/60'
+                        'rounded-full border px-3 py-1 text-xs font-medium',
+                        selectedDraft === index ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/50'
                       )}
                     >
-                      {KIND_LABELS[kind]}
+                      Draft {index + 1}: {item.amount ? `₹${item.amount}` : 'Needs amount'}
                     </button>
                   ))}
                 </div>
 
-                <Input
-                  label="Amount"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={draft.amount ?? ''}
-                  onChange={(event) => updateDraft({ amount: parseFloat(event.target.value) || null })}
-                />
-                <Input
-                  label="Date"
-                  type="date"
-                  value={draft.occurredOn}
-                  onChange={(event) => updateDraft({ occurredOn: event.target.value })}
-                />
-                <Input
-                  label="Description"
-                  value={draft.description}
-                  onChange={(event) => updateDraft({ description: event.target.value })}
-                  className="sm:col-span-2"
-                />
-
-                {draft.kind === 'income' && (
-                  <Input
-                    label="Source"
-                    value={draft.source ?? ''}
-                    onChange={(event) => updateDraft({ source: event.target.value })}
-                  />
-                )}
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-paper/70">Category</label>
-                  <select
-                    value={draft.categoryId ?? ''}
-                    onChange={(event) => updateDraft({ categoryId: event.target.value || null })}
-                    className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
-                  >
-                    <option value="">Uncategorized</option>
-                    {relevantCategories.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid grid-cols-3 gap-2 sm:col-span-2">
+                    {(Object.keys(KIND_LABELS) as TransactionKind[]).map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => updateDraft({ kind, categoryId: null })}
+                        className={cn(
+                          'rounded-lg border py-2 text-xs font-medium',
+                          draft.kind === kind ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/60'
+                        )}
+                      >
+                        {KIND_LABELS[kind]}
+                      </button>
                     ))}
-                  </select>
-                </div>
+                  </div>
+                  <Input label="Amount" type="number" min="0.01" step="0.01" value={draft.amount ?? ''} onChange={(event) => updateDraft({ amount: parseFloat(event.target.value) || null })} />
+                  <Input label="Date" type="date" value={draft.occurredOn} onChange={(event) => updateDraft({ occurredOn: event.target.value })} />
+                  <Input label="Description" value={draft.description} onChange={(event) => updateDraft({ description: event.target.value })} className="sm:col-span-2" />
 
-                {groups.length > 0 && (
+                  {draft.kind === 'income' && (
+                    <Input label="Source" value={draft.source ?? ''} onChange={(event) => updateDraft({ source: event.target.value })} />
+                  )}
+
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-paper/70">Group</label>
+                    <label className="text-sm font-medium text-paper/70">Category</label>
                     <select
-                      value={draft.groupId ?? ''}
-                      onChange={(event) => updateDraft({ groupId: event.target.value || null })}
+                      value={draft.categoryId ?? ''}
+                      onChange={(event) => updateDraft({ categoryId: event.target.value || null })}
                       className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
                     >
-                      <option value="">Personal / no group</option>
-                      {groups.map((group) => (
-                        <option key={group.id} value={group.id}>{group.emoji} {group.name}</option>
+                      <option value="">Uncategorized</option>
+                      {relevantCategories.map((category) => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
                       ))}
                     </select>
                   </div>
-                )}
-              </div>
 
-              {draft.kind === 'expense' && splitPeople.length > 0 && (
-                <div className="mt-4 border-t border-ink-border pt-4">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-paper/70">Split with</p>
-                    <button
-                      type="button"
-                      onClick={() => updateSplit({ enabled: !draft.split?.enabled })}
-                      className="text-xs font-medium text-emerald"
-                    >
-                      {draft.split?.enabled ? 'Turn off' : 'Turn on'}
-                    </button>
-                  </div>
-                  {draft.split?.enabled && (
-                    <div className="flex flex-col gap-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        {(['equal', 'custom'] as const).map((mode) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => updateSplit({ mode })}
-                            className={cn(
-                              'rounded-lg border py-1.5 text-xs font-medium',
-                              draft.split?.mode === mode
-                                ? 'border-emerald bg-emerald/15 text-emerald'
-                                : 'border-ink-border text-paper/60'
-                            )}
-                          >
-                            {mode === 'equal' ? 'Equal' : 'Custom'}
-                          </button>
+                  {groups.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-paper/70">Group</label>
+                      <select
+                        value={draft.groupId ?? ''}
+                        onChange={(event) => updateDraft({ groupId: event.target.value || null })}
+                        className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                      >
+                        <option value="">Personal / no group</option>
+                        {groups.map((group) => (
+                          <option key={group.id} value={group.id}>{group.emoji} {group.name}</option>
                         ))}
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {draft.kind === 'expense' && splitPeople.length > 0 && (
+                  <div className="mt-3 border-t border-ink-border pt-3">
+                    <button type="button" onClick={() => updateSplit({ enabled: !draft.split?.enabled })} className="text-xs font-medium text-emerald">
+                      {draft.split?.enabled ? 'Turn off split' : 'Split this'}
+                    </button>
+                    {draft.split?.enabled && (
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
                         {splitPeople.map((person) => {
                           const selected = draft.split?.peopleIds.includes(person.id);
                           return (
@@ -423,10 +402,7 @@ export function AiQuickAddModal({
                               key={person.id}
                               type="button"
                               onClick={() => togglePerson(person.id)}
-                              className={cn(
-                                'flex items-center justify-between rounded-lg border px-3 py-2 text-sm',
-                                selected ? 'border-emerald bg-emerald/10' : 'border-ink-border bg-ink'
-                              )}
+                              className={cn('flex items-center justify-between rounded-lg border px-3 py-2 text-sm', selected ? 'border-emerald bg-emerald/10' : 'border-ink-border bg-ink')}
                             >
                               <span className="truncate">{person.full_name}</span>
                               {selected && <Check size={16} className="text-emerald" />}
@@ -434,31 +410,65 @@ export function AiQuickAddModal({
                           );
                         })}
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
 
-              {draft.questions && draft.questions.length > 0 && (
-                <div className="mt-4 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-sm text-paper/70">
-                  {draft.questions.join(' ')}
-                </div>
-              )}
-            </div>
-          )}
+                {draft.questions && draft.questions.length > 0 && (
+                  <p className="mt-3 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-sm text-paper/70">
+                    {draft.questions.join(' ')}
+                  </p>
+                )}
 
-          {error && (
-            <div className="rounded-lg border border-clay/30 bg-clay-soft/10 px-3 py-2 text-sm text-clay">
-              {error}
-            </div>
-          )}
+                <Button type="button" size="lg" onClick={saveDrafts} disabled={saving} className="mt-3 w-full">
+                  {saving ? 'Saving...' : drafts.length === 1 ? 'Save draft' : `Save ${drafts.length} drafts`}
+                </Button>
+              </div>
+            )}
 
-          {drafts.length > 0 && (
-            <Button type="button" size="lg" onClick={saveDrafts} disabled={saving}>
-              {saving ? 'Saving...' : drafts.length === 1 ? 'Save draft' : `Save ${drafts.length} drafts`}
-            </Button>
-          )}
-        </div>
+            {error && (
+              <div className="mb-3 rounded-lg border border-clay/30 bg-clay-soft/10 px-3 py-2 text-sm text-clay">
+                {error}
+              </div>
+            )}
+          </div>
+        )}
+
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void sendMessage(message);
+          }}
+          className="flex items-end gap-2 p-3"
+        >
+          <textarea
+            value={message}
+            onFocus={() => setOpen(true)}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder="Ask or add: spent 250 on chai..."
+            rows={1}
+            className="max-h-28 min-h-11 flex-1 resize-none rounded-xl border border-ink-border bg-ink px-3 py-2.5 text-sm text-paper placeholder:text-paper/30 focus:border-emerald/60 focus:outline-none focus:ring-2 focus:ring-emerald/60"
+          />
+          <button
+            type="button"
+            onClick={toggleListening}
+            className={cn(
+              'flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border transition-colors',
+              listening ? 'border-clay bg-clay text-paper' : 'border-ink-border bg-ink text-paper/70 hover:text-paper'
+            )}
+            aria-label={listening ? 'Stop voice typing' : 'Start voice typing'}
+          >
+            {listening ? <Square size={17} /> : <Mic size={18} />}
+          </button>
+          <button
+            type="submit"
+            disabled={loading || !message.trim()}
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald text-paper transition-colors hover:bg-emerald/90 disabled:opacity-40"
+            aria-label="Send message"
+          >
+            {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+          </button>
+        </form>
       </div>
     </div>
   );

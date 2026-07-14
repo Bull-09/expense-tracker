@@ -33,6 +33,20 @@ function extractJson(content: string) {
   return JSON.parse(fenced?.[1] ?? trimmed);
 }
 
+function cheapReply(transcript: string) {
+  const text = transcript.trim().toLowerCase();
+  if (/^(hi|hello|hey|yo|namaste|sup)\b/.test(text)) {
+    return 'Hey, tell me what you spent, earned, or want to check.';
+  }
+  if (text.length < 4) {
+    return 'I am here. Type or speak a money note when ready.';
+  }
+  if (/\b(help|what can you do|how to use)\b/.test(text)) {
+    return 'Say things like “spent 250 on chai” or “got 5000 from dad”.';
+  }
+  return null;
+}
+
 export async function POST(request: Request) {
   try {
     const profile = await getCurrentProfile();
@@ -74,6 +88,11 @@ export async function POST(request: Request) {
 
     transcript = transcript.trim();
     if (!transcript) return jsonError('Say or type what happened first.');
+
+    const noTokenReply = cheapReply(transcript);
+    if (noTokenReply) {
+      return Response.json({ transcript, reply: noTokenReply, drafts: [] });
+    }
 
     const [categories, directory, groups] = await Promise.all([
       getCategories(),
@@ -119,6 +138,9 @@ export async function POST(request: Request) {
           content: [
             'You convert casual Indian English or Hinglish money notes into transaction drafts for an expense tracker.',
             'Return only valid JSON. Never save automatically.',
+            'Act like a concise friendly chat assistant. Reply normally if the user is chatting, greeting, or asking non-entry questions.',
+            'Do not force a transaction draft if there is no clear money event.',
+            'Keep reply under 22 words.',
             'Use IDs from the provided context whenever you can match a category, friend, or group.',
             'For dates, return YYYY-MM-DD. Resolve today/yesterday using context.today.',
             'For equal splits, peopleIds should include only other people, not the current user.',
@@ -133,6 +155,7 @@ export async function POST(request: Request) {
             context,
             transcript,
             outputShape: {
+              reply: 'short friendly assistant reply',
               drafts: [
                 {
                   kind: 'expense | income | investment',
@@ -161,7 +184,7 @@ export async function POST(request: Request) {
     const content = completion.choices[0]?.message?.content;
     if (!content) return jsonError('AI did not return a draft.', 502);
 
-    const parsed = extractJson(content) as { drafts?: ParsedDraft[] };
+    const parsed = extractJson(content) as { reply?: string; drafts?: ParsedDraft[] };
     const drafts = (parsed.drafts ?? []).map((draft) => ({
       kind: draft.kind,
       amount: typeof draft.amount === 'number' ? draft.amount : null,
@@ -175,7 +198,11 @@ export async function POST(request: Request) {
       questions: draft.questions ?? [],
     }));
 
-    return Response.json({ transcript, drafts });
+    return Response.json({
+      transcript,
+      reply: parsed.reply ?? (drafts.length > 0 ? 'I made a draft. Review it before saving.' : 'Got it.'),
+      drafts,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'AI request failed.';
     return jsonError(message, 500);
