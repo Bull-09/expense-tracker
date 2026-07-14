@@ -287,7 +287,6 @@ export function AiQuickAddModal({
       }
       appendMessage('assistant', drafts.length === 1 ? 'Saved it.' : `Saved ${drafts.length} entries.`);
       setDrafts([]);
-      setSubscriptionDrafts([]);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save drafts.');
@@ -319,6 +318,59 @@ export function AiQuickAddModal({
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save subscriptions.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveEverything() {
+    setError(null);
+    setSaving(true);
+    try {
+      for (const item of drafts) {
+        if (!item.amount || item.amount <= 0) {
+          throw new Error('Every entry needs a valid amount before saving.');
+        }
+        const split = item.split;
+        const equalShare = split?.peopleIds?.length ? item.amount / (split.peopleIds.length + 1) : 0;
+        await createTransaction({
+          kind: item.kind,
+          groupId: item.groupId ?? null,
+          categoryId: item.categoryId ?? null,
+          amount: item.amount,
+          description: item.description,
+          source: item.kind === 'income' ? item.source ?? undefined : undefined,
+          occurredOn: item.occurredOn,
+          splits: split?.enabled
+            ? split.peopleIds.map((personId) => ({
+                userId: personId,
+                amount: split.mode === 'custom' ? split.customAmounts?.[personId] ?? 0 : equalShare,
+              }))
+            : undefined,
+        });
+      }
+
+      for (const item of subscriptionDrafts) {
+        if (!item.amount || item.amount <= 0) {
+          throw new Error('Every subscription needs a valid amount before saving.');
+        }
+        await createSubscription({
+          name: item.name,
+          amount: item.amount,
+          billingDay: item.billingDay,
+          nextDueOn: item.nextDueOn,
+          categoryId: item.categoryId ?? null,
+          groupId: item.groupId ?? null,
+          notes: item.notes,
+        });
+      }
+
+      appendMessage('assistant', `Saved ${drafts.length + subscriptionDrafts.length} items.`);
+      setDrafts([]);
+      setSubscriptionDrafts([]);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save everything.');
     } finally {
       setSaving(false);
     }
@@ -367,6 +419,19 @@ export function AiQuickAddModal({
                 </div>
               )}
             </div>
+
+            {drafts.length > 0 && subscriptionDrafts.length > 0 && (
+              <div className="mb-3 rounded-xl border border-emerald/30 bg-emerald/5 p-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-paper/70">
+                    Found {drafts.length} entr{drafts.length === 1 ? 'y' : 'ies'} and {subscriptionDrafts.length} subscription{subscriptionDrafts.length === 1 ? '' : 's'}.
+                  </p>
+                  <Button type="button" size="sm" onClick={saveEverything} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save everything'}
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {drafts.length > 0 && draft && (
               <div className="mb-3 rounded-xl border border-emerald/30 bg-emerald/5 p-3">
