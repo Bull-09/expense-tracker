@@ -106,6 +106,36 @@ type ParsedSubscriptionDraft = {
   questions?: string[];
 };
 
+const MODEL_PRICING_USD_PER_1M: Record<string, { input: number; output: number; note?: string }> = {
+  'gpt-4o-mini': { input: 0.15, output: 0.60, note: 'Legacy estimate for gpt-4o-mini text tokens.' },
+  'gpt-5.4': { input: 2.50, output: 15.00 },
+  'gpt-5.4-mini': { input: 0.75, output: 4.50 },
+  'gpt-5.4-nano': { input: 0.20, output: 1.25 },
+  'gpt-5.4-pro': { input: 15.00, output: 120.00 },
+  'gpt-5.5': { input: 5.00, output: 30.00 },
+  'gpt-5.5-pro': { input: 21.00, output: 168.00 },
+  'gpt-5.6': { input: 1.75, output: 14.00 },
+};
+
+const TRANSCRIPTION_USD_PER_MINUTE: Record<string, number> = {
+  'gpt-4o-mini-transcribe': 0.003,
+  'gpt-4o-transcribe': 0.006,
+};
+
+function estimateTokenCostUsd(model: string, promptTokens: number, completionTokens: number) {
+  const pricing = MODEL_PRICING_USD_PER_1M[model];
+  if (!pricing) return null;
+
+  return ((promptTokens / 1_000_000) * pricing.input) + ((completionTokens / 1_000_000) * pricing.output);
+}
+
+function estimateTranscriptionCostUsd(model: string, durationMs: number) {
+  const rate = TRANSCRIPTION_USD_PER_MINUTE[model];
+  if (!rate || durationMs <= 0) return null;
+
+  return (durationMs / 60_000) * rate;
+}
+
 function jsonError(message: string, status = 400) {
   return Response.json({ error: message }, { status });
 }
@@ -257,11 +287,13 @@ export async function POST(request: Request) {
     const contentType = request.headers.get('content-type') ?? '';
     let transcript = '';
     let audio: File | null = null;
+    let voiceDurationMs = 0;
 
     if (contentType.includes('multipart/form-data')) {
       const form = await request.formData();
       const audioFile = form.get('audio');
       const typedNote = form.get('message');
+      const duration = form.get('durationMs');
 
       if (audioFile instanceof File && audioFile.size > 0) {
         audio = audioFile;
@@ -272,6 +304,9 @@ export async function POST(request: Request) {
 
       if (typeof typedNote === 'string') {
         transcript = typedNote;
+      }
+      if (typeof duration === 'string') {
+        voiceDurationMs = Math.max(0, Number(duration) || 0);
       }
     } else {
       const body = await request.json().catch(() => null);
@@ -284,11 +319,12 @@ export async function POST(request: Request) {
     }
 
     const openai = apiKey ? new OpenAI({ apiKey }) : null;
+    const transcribeModel = process.env.OPENAI_TRANSCRIBE_MODEL ?? 'gpt-4o-mini-transcribe';
 
     if (audio && openai) {
       const transcription = await openai.audio.transcriptions.create({
         file: audio,
-        model: process.env.OPENAI_TRANSCRIBE_MODEL ?? 'gpt-4o-mini-transcribe',
+        model: transcribeModel,
         prompt: [
           'Indian English and Hinglish expense tracker voice note.',
           'Correct obvious speech recognition mistakes into clean readable money notes.',
@@ -470,6 +506,18 @@ export async function POST(request: Request) {
 
     const content = completion.choices[0]?.message?.content;
     if (!content) return jsonError('AI did not return a draft.', 502);
+    const promptTokens = completion.usage?.prompt_tokens ?? 0;
+    const completionTokens = completion.usage?.completion_tokens ?? 0;
+    const estimatedTokenCostUsd = completion.usage
+      ? estimateTokenCostUsd(completion.model, promptTokens, completionTokens)
+      : null;
+    const estimatedTranscriptionCostUsd = audio
+      ? estimateTranscriptionCostUsd(transcribeModel, voiceDurationMs)
+      : null;
+    const estimatedTotalCostUsd = [estimatedTokenCostUsd, estimatedTranscriptionCostUsd]
+      .filter((cost): cost is number => typeof cost === 'number')
+      .reduce((sum, cost) => sum + cost, 0);
+    const pricingNote = MODEL_PRICING_USD_PER_1M[completion.model]?.note ?? null;
 
     const parsed = extractJson(content) as {
       reply?: string;
@@ -544,6 +592,10 @@ export async function POST(request: Request) {
         promptTokens: completion.usage.prompt_tokens,
         completionTokens: completion.usage.completion_tokens,
         totalTokens: completion.usage.total_tokens,
+        estimatedCostUsd: estimatedTokenCostUsd,
+        estimatedTranscriptionCostUsd,
+        estimatedTotalCostUsd: estimatedTotalCostUsd > 0 ? estimatedTotalCostUsd : estimatedTokenCostUsd ?? estimatedTranscriptionCostUsd,
+        pricingNote,
       } : null,
       drafts,
       subscriptionDrafts,

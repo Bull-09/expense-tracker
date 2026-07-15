@@ -65,6 +65,10 @@ type TokenUsage = {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+  estimatedCostUsd?: number | null;
+  estimatedTranscriptionCostUsd?: number | null;
+  estimatedTotalCostUsd?: number | null;
+  pricingNote?: string | null;
 };
 
 type SpeechRecognitionConstructor = new () => SpeechRecognition;
@@ -121,6 +125,29 @@ function getSpeechRecognition() {
   return win.SpeechRecognition ?? win.webkitSpeechRecognition ?? null;
 }
 
+function formatUsd(value?: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  if (value > 0 && value < 0.00001) return '<$0.00001';
+  if (value < 0.01) return `$${value.toFixed(5)}`;
+  if (value < 1) return `$${value.toFixed(4)}`;
+  return `$${value.toFixed(2)}`;
+}
+
+function formatTokenUsage(usage: TokenUsage) {
+  const total = typeof usage.totalTokens === 'number'
+    ? `${usage.totalTokens.toLocaleString('en-IN')} tokens`
+    : 'Token usage';
+  const parts = typeof usage.promptTokens === 'number' && typeof usage.completionTokens === 'number'
+    ? ` (${usage.promptTokens.toLocaleString('en-IN')} in / ${usage.completionTokens.toLocaleString('en-IN')} out)`
+    : '';
+  const cost = formatUsd(usage.estimatedTotalCostUsd ?? usage.estimatedCostUsd);
+  const voiceCost = formatUsd(usage.estimatedTranscriptionCostUsd);
+  const estimate = cost ? ` • ~${cost}` : '';
+  const voice = voiceCost ? ` incl. voice ${voiceCost}` : '';
+
+  return `${total}${parts}${estimate}${voice}`;
+}
+
 export function AiQuickAddModal({
   categories,
   directory,
@@ -159,6 +186,7 @@ export function AiQuickAddModal({
   const aiAbortRef = useRef<AbortController | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const liveVoiceTextRef = useRef('');
+  const voiceStartedAtRef = useRef<number | null>(null);
 
   const draft = drafts[selectedDraft];
   const subscriptionDraft = subscriptionDrafts[selectedSubscriptionDraft];
@@ -308,7 +336,7 @@ export function AiQuickAddModal({
     }
   }
 
-  async function sendVoiceNote(audio: Blob, visibleTranscript: string) {
+  async function sendVoiceNote(audio: Blob, visibleTranscript: string, durationMs = 0) {
     if (loading || audio.size === 0) return;
 
     setOpen(true);
@@ -324,6 +352,7 @@ export function AiQuickAddModal({
     try {
       const formData = new FormData();
       formData.append('audio', audio, 'c137-voice.webm');
+      formData.append('durationMs', String(Math.max(0, Math.round(durationMs))));
       if (visibleTranscript.trim()) formData.append('message', visibleTranscript.trim());
 
       const response = await fetch('/api/ai/quick-add', {
@@ -369,6 +398,7 @@ export function AiQuickAddModal({
     setOpen(true);
     setError(null);
     setVoiceMode('recording');
+    voiceStartedAtRef.current = Date.now();
     liveVoiceTextRef.current = message.trim();
 
     if (Recognition) {
@@ -424,9 +454,11 @@ export function AiQuickAddModal({
           stream.getTracks().forEach((track) => track.stop());
           const audio = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
           const visibleTranscript = liveVoiceTextRef.current;
+          const durationMs = voiceStartedAtRef.current ? Date.now() - voiceStartedAtRef.current : 0;
+          voiceStartedAtRef.current = null;
           setListening(false);
           setMessage('');
-          void sendVoiceNote(audio, visibleTranscript);
+          void sendVoiceNote(audio, visibleTranscript, durationMs);
         };
         recorder.start();
         setListening(true);
@@ -653,11 +685,11 @@ export function AiQuickAddModal({
                 >
                   <span>{item.text}</span>
                   {item.role === 'assistant' && item.usage?.totalTokens && (
-                    <span className="mt-1 block border-t border-paper/10 pt-1 text-[10px] font-medium text-paper/35">
-                      {item.usage.totalTokens.toLocaleString('en-IN')} tokens
-                      {typeof item.usage.promptTokens === 'number' && typeof item.usage.completionTokens === 'number'
-                        ? ` (${item.usage.promptTokens.toLocaleString('en-IN')} in / ${item.usage.completionTokens.toLocaleString('en-IN')} out)`
-                        : ''}
+                    <span
+                      className="mt-1 block border-t border-paper/10 pt-1 text-[10px] font-medium text-paper/35"
+                      title={item.usage.pricingNote ?? 'Estimated from configured model pricing. Actual OpenAI billing can vary.'}
+                    >
+                      {formatTokenUsage(item.usage)}
                     </span>
                   )}
                 </div>
