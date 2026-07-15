@@ -219,7 +219,7 @@ export function AddTransactionModal({
                 />
                 {createCategoryName.trim() && (
                   <p className="mt-2 text-xs text-paper/55">
-                    Will create "{createCategoryName.trim()}" and use it for this {kind}.
+                    Will create &quot;{createCategoryName.trim()}&quot; and use it for this {kind}.
                   </p>
                 )}
                 {suggestedCategory && !createCategoryName && (
@@ -228,7 +228,7 @@ export function AddTransactionModal({
                     onClick={() => setCategoryId(suggestedCategory.id)}
                     className="mt-2 text-xs font-medium text-emerald"
                   >
-                    Use existing "{suggestedCategory.name}"
+                    Use existing &quot;{suggestedCategory.name}&quot;
                   </button>
                 )}
               </div>

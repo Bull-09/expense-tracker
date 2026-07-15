@@ -879,7 +879,7 @@ export function AiQuickAddModal({
                         onClick={() => updateDraft({ createCategoryName: draft.suggestedCategoryName })}
                         className="self-start text-xs font-medium text-emerald"
                       >
-                        Use "{draft.suggestedCategoryName}"
+                        Use &quot;{draft.suggestedCategoryName}&quot;
                       </button>
                     )}
                   </div>

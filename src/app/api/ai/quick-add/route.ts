@@ -7,7 +7,7 @@ import {
   getGroups,
   getSplitShares,
 } from '@/lib/data/dashboard';
-import { inferCategory } from '@/lib/categories/auto';
+import { inferCategoryMatch, suggestCategoryName } from '@/lib/categories/auto';
 import { format } from 'date-fns';
 
 export const runtime = 'nodejs';
@@ -367,6 +367,46 @@ function humanDraftReply({
   return cleanReply || 'I am here. Ask me anything, or tell me a money note to add.';
 }
 
+function categoryExistsForKind(
+  categoryId: string | null | undefined,
+  kind: ParsedDraft['kind'] | 'expense',
+  categories: Awaited<ReturnType<typeof getCategories>>
+) {
+  if (!categoryId) return false;
+  const expectedKind = kind === 'income' ? 'income' : 'expense';
+  return categories.some((category) => category.id === categoryId && category.kind === expectedKind);
+}
+
+function resolveCategory(
+  kind: ParsedDraft['kind'] | 'expense',
+  text: string,
+  categoryId: string | null | undefined,
+  suggestedCategoryName: string | null | undefined,
+  categories: Awaited<ReturnType<typeof getCategories>>
+) {
+  const localMatch = inferCategoryMatch(kind, text, categories);
+  const validAiCategoryId = categoryExistsForKind(categoryId, kind, categories) ? categoryId ?? null : null;
+
+  if (localMatch && (!validAiCategoryId || localMatch.score >= 10)) {
+    return {
+      categoryId: localMatch.category.id,
+      suggestedCategoryName: null,
+    };
+  }
+
+  if (validAiCategoryId) {
+    return {
+      categoryId: validAiCategoryId,
+      suggestedCategoryName: null,
+    };
+  }
+
+  return {
+    categoryId: null,
+    suggestedCategoryName: suggestedCategoryName ?? suggestCategoryName(kind, text),
+  };
+}
+
 function isOutstandingQuestion(transcript: string) {
   const text = transcript.trim().toLowerCase();
   const asksForStatus = /\b(who|how much|kitna|kya|show|list|tell|pending|outstanding|balance|balances|summary)\b/.test(text);
@@ -686,34 +726,55 @@ export async function POST(request: Request) {
     const rawDrafts = parsed.drafts ?? [];
     const subscriptionFallbacks = rawDrafts
       .filter((draft) => !looksLikeFriendMoneyDraft(draft) && looksLikeSubscriptionDraft(draft))
-      .map((draft) => ({
+      .map((draft) => {
+        const category = resolveCategory(
+          'expense',
+          `${draft.description ?? ''} ${draft.source ?? ''} ${draft.suggestedCategoryName ?? ''}`,
+          draft.categoryId,
+          draft.suggestedCategoryName,
+          categories
+        );
+
+        return {
         name: subscriptionNameFromDraft(draft),
         amount: typeof draft.amount === 'number' ? draft.amount : null,
         billingDay: new Date(today).getDate(),
         frequency: 'monthly' as const,
         nextDueOn: normalizeDraftDate(draft.occurredOn, today, normalizedTranscript),
-        categoryId: draft.categoryId ?? inferCategory('expense', `${draft.description ?? ''} ${draft.source ?? ''}`, categories)?.id ?? null,
+        categoryId: category.categoryId,
         groupId: draft.groupId ?? null,
         notes: draft.description ?? null,
         confidence: typeof draft.confidence === 'number' ? Math.min(draft.confidence, 0.85) : 0.75,
         questions: draft.questions ?? [],
-      }));
+        };
+      });
     const drafts = rawDrafts
       .filter((draft) => !looksLikeFriendMoneyDraft(draft))
       .filter((draft) => !looksLikeSubscriptionDraft(draft))
-      .map((draft) => ({
-      kind: normalizeDraftKind(draft.kind),
-      amount: typeof draft.amount === 'number' ? draft.amount : null,
-      description: draft.description ?? '',
-      source: draft.source ?? null,
-      occurredOn: normalizeDraftDate(draft.occurredOn, today, normalizedTranscript),
-      categoryId: draft.categoryId ?? inferCategory(normalizeDraftKind(draft.kind), `${draft.description ?? ''} ${draft.source ?? ''}`, categories)?.id ?? null,
-      suggestedCategoryName: draft.suggestedCategoryName ?? null,
-      groupId: draft.groupId ?? null,
-      split: draft.split ?? { enabled: false, mode: 'equal', peopleIds: [] },
-      confidence: typeof draft.confidence === 'number' ? draft.confidence : 0.5,
-      questions: draft.questions ?? [],
-    }));
+      .map((draft) => {
+        const kind = normalizeDraftKind(draft.kind);
+        const category = resolveCategory(
+          kind,
+          `${draft.description ?? ''} ${draft.source ?? ''} ${draft.suggestedCategoryName ?? ''}`,
+          draft.categoryId,
+          draft.suggestedCategoryName,
+          categories
+        );
+
+        return {
+          kind,
+          amount: typeof draft.amount === 'number' ? draft.amount : null,
+          description: draft.description ?? '',
+          source: draft.source ?? null,
+          occurredOn: normalizeDraftDate(draft.occurredOn, today, normalizedTranscript),
+          categoryId: category.categoryId,
+          suggestedCategoryName: category.suggestedCategoryName,
+          groupId: draft.groupId ?? null,
+          split: draft.split ?? { enabled: false, mode: 'equal', peopleIds: [] },
+          confidence: typeof draft.confidence === 'number' ? draft.confidence : 0.5,
+          questions: draft.questions ?? [],
+        };
+      });
     const friendLedgerDrafts = (parsed.friendLedgerDrafts ?? []).map((draft) => ({
       direction: draft.direction === 'lent' ? 'lent' : 'borrowed',
       amount: typeof draft.amount === 'number' ? draft.amount : null,
@@ -725,18 +786,28 @@ export async function POST(request: Request) {
       questions: draft.questions ?? [],
     }));
     const subscriptionDrafts = [
-      ...(parsed.subscriptionDrafts ?? []).map((draft) => ({
-      name: draft.name ?? '',
-      amount: typeof draft.amount === 'number' ? draft.amount : null,
-      billingDay: typeof draft.billingDay === 'number' ? Math.min(Math.max(Math.trunc(draft.billingDay), 1), 31) : new Date(today).getDate(),
-      frequency: draft.frequency === 'weekly' ? 'weekly' : 'monthly',
-      nextDueOn: draft.nextDueOn || today,
-      categoryId: draft.categoryId ?? inferCategory('expense', draft.name ?? '', categories)?.id ?? null,
-      groupId: draft.groupId ?? null,
-      notes: draft.notes ?? null,
-      confidence: typeof draft.confidence === 'number' ? draft.confidence : 0.5,
-      questions: draft.questions ?? [],
-      })),
+      ...(parsed.subscriptionDrafts ?? []).map((draft) => {
+        const category = resolveCategory(
+          'expense',
+          `${draft.name ?? ''} ${draft.notes ?? ''}`,
+          draft.categoryId,
+          null,
+          categories
+        );
+
+        return {
+          name: draft.name ?? '',
+          amount: typeof draft.amount === 'number' ? draft.amount : null,
+          billingDay: typeof draft.billingDay === 'number' ? Math.min(Math.max(Math.trunc(draft.billingDay), 1), 31) : new Date(today).getDate(),
+          frequency: draft.frequency === 'weekly' ? 'weekly' : 'monthly',
+          nextDueOn: draft.nextDueOn || today,
+          categoryId: category.categoryId,
+          groupId: draft.groupId ?? null,
+          notes: draft.notes ?? null,
+          confidence: typeof draft.confidence === 'number' ? draft.confidence : 0.5,
+          questions: draft.questions ?? [],
+        };
+      }),
       ...subscriptionFallbacks,
     ];
     const reply = humanDraftReply({
