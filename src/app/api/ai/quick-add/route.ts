@@ -357,6 +357,10 @@ function humanDraftReply({
   ].filter(Boolean);
 
   if (hasDrafts) {
+    if (friendLedgerDraftsCount > 0 && draftsCount === 0 && subscriptionDraftsCount === 0) {
+      return `I made ${parts.join(', ')}. It will be saved in Splits. Review it, then save.`;
+    }
+
     return `I made ${parts.join(', ')}. Review it, then save.`;
   }
 
@@ -473,7 +477,7 @@ export async function POST(request: Request) {
         transcript,
         correctedTranscript,
         normalizedTranscript,
-        reply: 'I made 1 friend balance. Review it, then save.',
+        reply: 'I made 1 friend balance. It will be saved in Splits. Review it, then save.',
         drafts: [],
         subscriptionDrafts: [],
         friendLedgerDrafts: [deterministicFriendDraft],

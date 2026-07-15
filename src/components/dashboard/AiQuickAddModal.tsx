@@ -181,6 +181,9 @@ function assistantReplyText(data: {
     friends ? `${friends} friend balance${friends === 1 ? '' : 's'}` : '',
   ].filter(Boolean);
 
+  if (friends > 0 && drafts === 0 && subscriptions === 0) {
+    return `I made ${parts.join(', ')}. It will be saved in Splits. Review it, then save.`;
+  }
   if (parts.length > 0) return `I made ${parts.join(', ')}. Review it, then save.`;
   return reply || 'I am here. Ask me anything, or tell me a money note to add.';
 }
