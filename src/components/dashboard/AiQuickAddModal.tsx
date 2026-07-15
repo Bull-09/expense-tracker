@@ -150,10 +150,16 @@ export function AiQuickAddModal({
   const expenseCategories = categories.filter((category) => category.kind === 'expense');
 
   function appendMessage(role: ChatMessage['role'], text: string) {
+    const id = `${role}-${Date.now()}-${Math.random()}`;
     setMessages((current) => [
       ...current.slice(-5),
-      { id: `${role}-${Date.now()}-${Math.random()}`, role, text },
+      { id, role, text },
     ]);
+    return id;
+  }
+
+  function updateMessage(id: string, text: string) {
+    setMessages((current) => current.map((item) => (item.id === id ? { ...item, text } : item)));
   }
 
   function updateDraft(patch: Partial<Draft>) {
@@ -274,7 +280,7 @@ export function AiQuickAddModal({
     setVoiceMode('transcribing');
 
     const shownText = visibleTranscript.trim() || 'Voice note';
-    appendMessage('user', shownText);
+    const voiceMessageId = appendMessage('user', shownText);
 
     try {
       const formData = new FormData();
@@ -288,8 +294,9 @@ export function AiQuickAddModal({
       const data = await readJsonResponse(response);
       if (!response.ok) throw new Error(data.error ?? 'Could not understand that voice note.');
 
-      if (data.transcript && data.transcript !== shownText) {
-        appendMessage('user', `Heard: ${data.transcript}`);
+      const cleanedTranscript = data.correctedTranscript ?? data.normalizedTranscript ?? data.transcript;
+      if (typeof cleanedTranscript === 'string' && cleanedTranscript.trim()) {
+        updateMessage(voiceMessageId, cleanedTranscript.trim());
       }
       appendMessage('assistant', data.reply ?? 'Done.');
       setDrafts((data.drafts ?? []).map((item: Draft) => ({
@@ -607,7 +614,7 @@ export function AiQuickAddModal({
               {loading && (
                 <div className="mr-auto flex items-center gap-2 rounded-2xl bg-ink px-3 py-2 text-sm text-paper/50">
                   <Loader2 size={14} className="animate-spin" />
-                  Thinking
+                  {voiceMode === 'transcribing' ? 'Correcting voice' : 'Thinking'}
                 </div>
               )}
             </div>

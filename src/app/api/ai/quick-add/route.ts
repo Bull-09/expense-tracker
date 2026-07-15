@@ -70,21 +70,68 @@ function normalizeTranscript(input: string) {
     .replace(/[₹]/g, ' rupees ')
     .replace(/\b(rs|inr)\.?\s*/gi, ' rupees ')
     .replace(/\b(\d+(?:\.\d+)?)\s*k\b/gi, (_, value) => `${Number(value) * 1000}`)
+    .replace(/\b(\d+(?:\.\d+)?)\s*(hundred|hundreds)\b/gi, (_, value) => `${Number(value) * 100}`)
+    .replace(/\b(\d+(?:\.\d+)?)\s*(thousand|thousands)\b/gi, (_, value) => `${Number(value) * 1000}`)
     .replace(/\bsubcription\b/gi, 'subscription')
     .replace(/\bsubscribtion\b/gi, 'subscription')
+    .replace(/\bsubscript(?:ion)?\b/gi, 'subscription')
     .replace(/\bmontly\b/gi, 'monthly')
+    .replace(/\bmonthy\b/gi, 'monthly')
     .replace(/\brecurringg?\b/gi, 'recurring')
     .replace(/\bexpence\b/gi, 'expense')
+    .replace(/\bexpenditure\b/gi, 'expense')
     .replace(/\bpayed\b/gi, 'paid')
     .replace(/\boweing\b/gi, 'owing')
+    .replace(/\budhar\b/gi, 'udhaar')
+    .replace(/\budaar\b/gi, 'udhaar')
+    .replace(/\budhaar\b/gi, 'udhaar')
+    .replace(/\ble liya\b/gi, 'borrowed')
+    .replace(/\bliya\b/gi, 'borrowed')
+    .replace(/\bliye\b/gi, 'borrowed')
+    .replace(/\bde diya\b/gi, 'lent')
+    .replace(/\bdiya\b/gi, 'lent')
+    .replace(/\bsplit kar\b/gi, 'split')
+    .replace(/\bsplit karo\b/gi, 'split')
+    .replace(/\bsutta\b/gi, 'smoke')
+    .replace(/\bcigger?e?t?t?e?\b/gi, 'cigarette')
+    .replace(/\bcigg?\b/gi, 'cigarette')
     .replace(/\bchaii\b/gi, 'chai')
+    .replace(/\bchaay\b/gi, 'chai')
+    .replace(/\btea\b/gi, 'chai')
+    .replace(/\bcoffeee\b/gi, 'coffee')
+    .replace(/\bpetrol\b/gi, 'fuel')
+    .replace(/\bdiesel\b/gi, 'fuel')
+    .replace(/\bcab\b/gi, 'cab')
     .replace(/\buber\b/gi, 'Uber')
+    .replace(/\bola\b/gi, 'Ola')
     .replace(/\bnet flix\b/gi, 'Netflix')
     .replace(/\bspotyfy\b/gi, 'Spotify')
+    .replace(/\bspoti fi\b/gi, 'Spotify')
+    .replace(/\byou tube\b/gi, 'YouTube')
+    .replace(/\bprimee\b/gi, 'Prime')
+    .replace(/\binsta\b/gi, 'Instagram')
+    .replace(/\bswiggy\b/gi, 'Swiggy')
+    .replace(/\bzomato\b/gi, 'Zomato')
+    .replace(/\bblink it\b/gi, 'Blinkit')
     .replace(/\bsplit between\b/gi, 'split with')
     .replace(/\bdivide with\b/gi, 'split with')
+    .replace(/\bshared with\b/gi, 'split with')
+    .replace(/\bfrom my friend\b/gi, 'from friend')
     .replace(/\band then\b/gi, ' and ')
     .replace(/\balso\b/gi, ' and ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function cleanVoiceTranscript(input: string) {
+  const normalized = normalizeTranscript(input);
+  return normalized
+    .replace(/\bI\s+(?:have\s+)?(?:spent|spend)\b/gi, 'spent')
+    .replace(/\bI\s+(?:have\s+)?(?:got|received)\b/gi, 'got')
+    .replace(/\bI\s+(?:have\s+)?(?:borrowed|took)\b/gi, 'borrowed')
+    .replace(/\bI\s+(?:have\s+)?(?:gave|given|lent)\b/gi, 'lent')
+    .replace(/\badd\s+one\s+entry\s+for\b/gi, '')
+    .replace(/\bplease\s+add\b/gi, 'add')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -191,26 +238,43 @@ export async function POST(request: Request) {
       const transcription = await openai.audio.transcriptions.create({
         file: audio,
         model: process.env.OPENAI_TRANSCRIBE_MODEL ?? 'gpt-4o-mini-transcribe',
+        prompt: [
+          'Indian English and Hinglish expense tracker voice note.',
+          'Common words: rupees, chai, sutta, smoke, cigarette, petrol, cab, Uber, Ola, Swiggy, Zomato, Blinkit.',
+          'Money actions: spent, paid, got, received, borrowed, lent, udhaar, split, subscription, monthly.',
+          'Preserve names of friends, vendors, apps, and amounts.',
+        ].join(' '),
       });
       transcript = transcription.text || transcript;
     }
 
     transcript = transcript.trim();
     if (!transcript) return jsonError('Say or type what happened first.');
-    const normalizedTranscript = normalizeTranscript(transcript);
+    const correctedTranscript = audio ? cleanVoiceTranscript(transcript) : transcript;
+    const normalizedTranscript = normalizeTranscript(correctedTranscript);
 
     const noTokenReply = cheapReply(normalizedTranscript);
     if (noTokenReply) {
-      return Response.json({ transcript, normalizedTranscript, reply: noTokenReply, drafts: [], subscriptionDrafts: [] });
+      return Response.json({
+        transcript,
+        correctedTranscript,
+        normalizedTranscript,
+        reply: noTokenReply,
+        drafts: [],
+        subscriptionDrafts: [],
+        friendLedgerDrafts: [],
+      });
     }
 
     if (isOutstandingQuestion(normalizedTranscript)) {
       return Response.json({
         transcript,
+        correctedTranscript,
         normalizedTranscript,
         reply: await outstandingReply(profile.id),
         drafts: [],
         subscriptionDrafts: [],
+        friendLedgerDrafts: [],
       });
     }
 
@@ -293,6 +357,7 @@ export async function POST(request: Request) {
           content: JSON.stringify({
             context,
             rawTranscript: transcript,
+            correctedTranscript,
             transcript: normalizedTranscript,
             outputShape: {
               reply: 'short friendly assistant reply',
@@ -393,6 +458,7 @@ export async function POST(request: Request) {
 
     return Response.json({
       transcript,
+      correctedTranscript,
       normalizedTranscript,
       reply: parsed.reply ?? (drafts.length > 0 || subscriptionDrafts.length > 0 || friendLedgerDrafts.length > 0 ? 'I made a draft. Review it before saving.' : 'Got it.'),
       drafts,
