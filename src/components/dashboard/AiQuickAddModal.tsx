@@ -724,12 +724,18 @@ export function AiQuickAddModal({
                       ))}
                     </select>
                     {!draft.categoryId && (
-                      <Input
-                        label="New category"
-                        value={draft.createCategoryName ?? ''}
-                        onChange={(event) => updateDraft({ createCategoryName: event.target.value })}
-                        placeholder="Create while saving"
-                      />
+                      <div className="rounded-lg border border-ink-border bg-ink px-3 py-2">
+                        <p className="text-xs text-paper/45">
+                          This will save as Uncategorized unless you pick or create a category.
+                        </p>
+                        <Input
+                          label="New category (optional)"
+                          value={draft.createCategoryName ?? ''}
+                          onChange={(event) => updateDraft({ createCategoryName: event.target.value })}
+                          placeholder="Create while saving"
+                          className="mt-2"
+                        />
+                      </div>
                     )}
                     {!draft.categoryId && draft.suggestedCategoryName && !draft.createCategoryName && (
                       <button
@@ -737,7 +743,7 @@ export function AiQuickAddModal({
                         onClick={() => updateDraft({ createCategoryName: draft.suggestedCategoryName })}
                         className="self-start text-xs font-medium text-emerald"
                       >
-                        Use “{draft.suggestedCategoryName}”
+                        Use "{draft.suggestedCategoryName}"
                       </button>
                     )}
                   </div>

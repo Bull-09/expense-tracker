@@ -112,12 +112,6 @@ export async function createTransaction(input: {
     categoryId = category.id;
   }
 
-  if (!categoryId && input.kind !== 'transfer') {
-    const { data: categories } = await supabase.from('categories').select('*');
-    const inferred = inferCategory(input.kind, `${input.description} ${input.source ?? ''}`, categories ?? []);
-    categoryId = inferred?.id ?? null;
-  }
-
   const transactionRow = {
     user_id: user.id,
     ...(input.groupId ? { group_id: input.groupId } : {}),
@@ -361,6 +355,7 @@ export async function updateTransaction(input: {
   kind: TransactionKind;
   groupId?: string | null;
   categoryId: string | null;
+  createCategoryName?: string | null;
   amount: number;
   description: string;
   source?: string;
@@ -373,12 +368,13 @@ export async function updateTransaction(input: {
   assertValidTransactionKind(input.kind);
 
   let categoryId = input.kind === 'transfer' ? null : input.categoryId;
-  if (!categoryId && input.kind !== 'transfer') {
-    const { data: categories } = await supabase.from('categories').select('*');
-    const inferred = inferCategory(input.kind, `${input.description} ${input.source ?? ''}`, categories ?? []);
-    categoryId = inferred?.id ?? null;
+  if (!categoryId && input.kind !== 'transfer' && input.createCategoryName?.trim()) {
+    const category = await createCategory({
+      name: input.createCategoryName,
+      kind: input.kind === 'income' ? 'income' : 'expense',
+    });
+    categoryId = category.id;
   }
-
   const isSplit = (input.kind === 'expense' || input.kind === 'transfer') && !!(input.splits && input.splits.length > 0);
 
   const transactionPatch = {

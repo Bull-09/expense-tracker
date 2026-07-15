@@ -36,7 +36,7 @@ export function AddTransactionModal({
   const [description, setDescription] = useState('');
   const [source, setSource] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
-  const [categoryTouched, setCategoryTouched] = useState(false);
+  const [createCategoryName, setCreateCategoryName] = useState('');
   const [groupId, setGroupId] = useState<string>('');
   const [occurredOn, setOccurredOn] = useState(new Date().toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
@@ -55,7 +55,7 @@ export function AddTransactionModal({
     () => inferCategory(kind, `${description} ${source}`, categories),
     [categories, description, kind, source]
   );
-  const effectiveCategoryId = categoryTouched ? categoryId : categoryId || suggestedCategory?.id || '';
+  const effectiveCategoryId = categoryId;
 
   const selectedGroup = groups.find((group) => group.id === groupId);
   const allowedMemberIds = selectedGroup?.members?.map((member) => member.user_id) ?? [];
@@ -107,6 +107,7 @@ export function AddTransactionModal({
         kind,
         groupId: groupId || null,
         categoryId: effectiveCategoryId || null,
+        createCategoryName: effectiveCategoryId ? null : createCategoryName || null,
         amount: numAmount,
         description,
         source: kind === 'income' || kind === 'transfer' ? source : undefined,
@@ -140,7 +141,11 @@ export function AddTransactionModal({
               <button
                 key={k}
                 type="button"
-                onClick={() => { setKind(k); setCategoryId(''); setCategoryTouched(false); }}
+                onClick={() => {
+                  setKind(k);
+                  setCategoryId('');
+                  setCreateCategoryName('');
+                }}
                 className={cn(
                   'py-2 rounded-lg text-sm font-medium border transition-colors',
                   kind === k
@@ -188,7 +193,7 @@ export function AddTransactionModal({
               value={effectiveCategoryId}
               onChange={(e) => {
                 setCategoryId(e.target.value);
-                setCategoryTouched(true);
+                if (e.target.value) setCreateCategoryName('');
               }}
               className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
             >
@@ -197,8 +202,28 @@ export function AddTransactionModal({
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            {!categoryTouched && suggestedCategory && (
-              <p className="text-xs text-emerald">Auto-selected: {suggestedCategory.name}</p>
+            {!effectiveCategoryId && (
+              <div className="rounded-lg border border-ink-border bg-ink px-3 py-2">
+                <p className="text-xs text-paper/45">
+                  This will save as Uncategorized unless you pick or create a category.
+                </p>
+                <Input
+                  label="New category (optional)"
+                  value={createCategoryName}
+                  onChange={(event) => setCreateCategoryName(event.target.value)}
+                  placeholder="e.g. Cigarettes, Snacks, Apps"
+                  className="mt-2"
+                />
+                {suggestedCategory && !createCategoryName && (
+                  <button
+                    type="button"
+                    onClick={() => setCategoryId(suggestedCategory.id)}
+                    className="mt-2 text-xs font-medium text-emerald"
+                  >
+                    Use existing "{suggestedCategory.name}"
+                  </button>
+                )}
+              </div>
             )}
           </div>
           )}

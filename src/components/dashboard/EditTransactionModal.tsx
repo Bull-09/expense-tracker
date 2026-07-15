@@ -38,7 +38,7 @@ export function EditTransactionModal({
   const [description, setDescription] = useState(transaction.description);
   const [source, setSource] = useState(transaction.source ?? '');
   const [categoryId, setCategoryId] = useState(transaction.category_id ?? '');
-  const [categoryTouched, setCategoryTouched] = useState(!!transaction.category_id);
+  const [createCategoryName, setCreateCategoryName] = useState('');
   const [groupId, setGroupId] = useState(transaction.group_id ?? '');
   const [occurredOn, setOccurredOn] = useState(transaction.occurred_on);
   const [splitEnabled, setSplitEnabled] = useState(transaction.is_split);
@@ -56,7 +56,7 @@ export function EditTransactionModal({
     () => inferCategory(kind, `${description} ${source}`, categories),
     [categories, description, kind, source]
   );
-  const effectiveCategoryId = categoryTouched ? categoryId : categoryId || suggestedCategory?.id || '';
+  const effectiveCategoryId = categoryId;
   const selectedGroup = groups.find((group) => group.id === groupId);
   const allowedMemberIds = selectedGroup?.members?.map((member) => member.user_id) ?? [];
   const otherUsers = directory.filter((u) =>
@@ -99,6 +99,7 @@ export function EditTransactionModal({
         kind,
         groupId: groupId || null,
         categoryId: effectiveCategoryId || null,
+        createCategoryName: effectiveCategoryId ? null : createCategoryName || null,
         amount: numAmount,
         description,
         source: kind === 'income' || kind === 'transfer' ? source : undefined,
@@ -139,7 +140,7 @@ export function EditTransactionModal({
                 onClick={() => {
                   setKind(k);
                   setCategoryId('');
-                  setCategoryTouched(false);
+                  setCreateCategoryName('');
                   if (k !== 'expense' && k !== 'transfer') setSplitEnabled(false);
                 }}
                 className={cn(
@@ -170,7 +171,7 @@ export function EditTransactionModal({
               value={effectiveCategoryId}
               onChange={(e) => {
                 setCategoryId(e.target.value);
-                setCategoryTouched(true);
+                if (e.target.value) setCreateCategoryName('');
               }}
               className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
             >
@@ -179,8 +180,28 @@ export function EditTransactionModal({
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            {!categoryTouched && suggestedCategory && (
-              <p className="text-xs text-emerald">Auto-selected: {suggestedCategory.name}</p>
+            {!effectiveCategoryId && (
+              <div className="rounded-lg border border-ink-border bg-ink px-3 py-2">
+                <p className="text-xs text-paper/45">
+                  This will stay Uncategorized unless you pick or create a category.
+                </p>
+                <Input
+                  label="New category (optional)"
+                  value={createCategoryName}
+                  onChange={(event) => setCreateCategoryName(event.target.value)}
+                  placeholder="e.g. Cigarettes, Snacks, Apps"
+                  className="mt-2"
+                />
+                {suggestedCategory && !createCategoryName && (
+                  <button
+                    type="button"
+                    onClick={() => setCategoryId(suggestedCategory.id)}
+                    className="mt-2 text-xs font-medium text-emerald"
+                  >
+                    Use existing "{suggestedCategory.name}"
+                  </button>
+                )}
+              </div>
             )}
           </div>
           )}
