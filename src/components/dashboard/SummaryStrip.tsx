@@ -1,6 +1,6 @@
 import { DashboardTotals } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
-import { TrendingUp, TrendingDown, PiggyBank, Wallet } from 'lucide-react';
+import { HandCoins, PiggyBank, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 
 export function SummaryStrip({ totals }: { totals: DashboardTotals }) {
   const items = [
@@ -28,10 +28,22 @@ export function SummaryStrip({ totals }: { totals: DashboardTotals }) {
       icon: Wallet,
       color: totals.netCashflow >= 0 ? 'text-emerald' : 'text-clay',
     },
+    {
+      label: 'People owe me',
+      value: totals.totalOwedToYou,
+      icon: HandCoins,
+      color: 'text-emerald',
+    },
+    {
+      label: 'I owe people',
+      value: totals.totalYouOwe,
+      icon: HandCoins,
+      color: 'text-clay',
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
       {items.map((item) => {
         const Icon = item.icon;
         return (
@@ -40,7 +52,7 @@ export function SummaryStrip({ totals }: { totals: DashboardTotals }) {
               <span className="text-xs font-medium text-paper/50 uppercase tracking-wide">{item.label}</span>
               <Icon size={16} className={item.color} />
             </div>
-            <p className={`font-ledger text-2xl font-bold ${item.color}`}>
+            <p className={`font-ledger text-xl font-bold ${item.color}`}>
               {formatCurrency(item.value)}
             </p>
           </div>
