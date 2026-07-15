@@ -37,6 +37,38 @@ function normalizeDraftKind(kind: unknown): ParsedDraft['kind'] {
   return 'expense';
 }
 
+function hasExplicitDateClue(transcript: string) {
+  return /\b(today|yesterday|tomorrow|last night|this morning|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\b/i.test(transcript)
+    || /\b\d{1,2}(?:st|nd|rd|th)\b/i.test(transcript)
+    || /\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b/.test(transcript);
+}
+
+function hasExplicitYear(transcript: string) {
+  return /\b(?:19|20)\d{2}\b/.test(transcript);
+}
+
+function normalizeDraftDate(date: unknown, today: string, transcript: string) {
+  if (!hasExplicitDateClue(transcript)) return today;
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return today;
+
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return today;
+
+  const currentYear = Number(today.slice(0, 4));
+  const parsedYear = parsed.getFullYear();
+  if (!hasExplicitYear(transcript) && parsedYear !== currentYear) {
+    const monthDay = date.slice(4);
+    return `${currentYear}${monthDay}`;
+  }
+
+  return date;
+}
+
+function looksLikeFriendMoneyDraft(draft: ParsedDraft) {
+  const text = `${draft.description ?? ''} ${draft.source ?? ''}`.toLowerCase();
+  return /\b(borrowed|borrow|took money|take money|lent|lend|gave money|udhaar|loaned)\b/.test(text);
+}
+
 type ParsedFriendLedgerDraft = {
   direction: 'borrowed' | 'lent';
   amount: number | null;
@@ -429,12 +461,14 @@ export async function POST(request: Request) {
       subscriptionDrafts?: ParsedSubscriptionDraft[];
       friendLedgerDrafts?: ParsedFriendLedgerDraft[];
     };
-    const drafts = (parsed.drafts ?? []).map((draft) => ({
+    const drafts = (parsed.drafts ?? [])
+      .filter((draft) => !looksLikeFriendMoneyDraft(draft))
+      .map((draft) => ({
       kind: normalizeDraftKind(draft.kind),
       amount: typeof draft.amount === 'number' ? draft.amount : null,
       description: draft.description ?? '',
       source: draft.source ?? null,
-      occurredOn: draft.occurredOn || today,
+      occurredOn: normalizeDraftDate(draft.occurredOn, today, normalizedTranscript),
       categoryId: draft.categoryId ?? inferCategory(normalizeDraftKind(draft.kind), `${draft.description ?? ''} ${draft.source ?? ''}`, categories)?.id ?? null,
       suggestedCategoryName: draft.suggestedCategoryName ?? null,
       groupId: draft.groupId ?? null,
@@ -448,7 +482,7 @@ export async function POST(request: Request) {
       personId: draft.personId ?? null,
       personName: draft.personName ?? null,
       description: draft.description ?? '',
-      occurredOn: draft.occurredOn || today,
+      occurredOn: normalizeDraftDate(draft.occurredOn, today, normalizedTranscript),
       confidence: typeof draft.confidence === 'number' ? draft.confidence : 0.5,
       questions: draft.questions ?? [],
     }));
