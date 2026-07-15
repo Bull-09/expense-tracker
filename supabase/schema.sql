@@ -14,16 +14,23 @@ create table if not exists public.profiles (
   full_name text not null default 'New User',
   email text not null,
   avatar_color text not null default '#3F7A5C',
+  contact_owner_id uuid references auth.users(id) on delete cascade,
   monthly_budget numeric(12,2),
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  drop constraint if exists profiles_id_fkey;
+
+alter table public.profiles
+  add column if not exists contact_owner_id uuid references auth.users(id) on delete cascade;
 
 alter table public.profiles enable row level security;
 
 create policy "Profiles are viewable by all authenticated users"
   on public.profiles for select
   to authenticated
-  using (true);
+  using (contact_owner_id is null or contact_owner_id = auth.uid());
 
 create policy "Users can update their own profile"
   on public.profiles for update
@@ -34,6 +41,36 @@ create policy "Users can insert their own profile"
   on public.profiles for insert
   to authenticated
   with check (auth.uid() = id);
+
+create or replace function public.create_contact_profile(contact_name text)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  clean_name text := nullif(trim(regexp_replace(contact_name, '\s+', ' ', 'g')), '');
+  contact_id uuid := gen_random_uuid();
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if clean_name is null then
+    raise exception 'Contact name is required';
+  end if;
+
+  insert into public.profiles (id, full_name, email, avatar_color, contact_owner_id)
+  values (
+    contact_id,
+    clean_name,
+    lower(regexp_replace(clean_name, '[^a-zA-Z0-9]+', '.', 'g')) || '.' || replace(contact_id::text, '-', '') || '@contact.local',
+    '#3F7A5C',
+    auth.uid()
+  );
+
+  return contact_id;
+end;
+$$;
 
 -- Auto-create a profile row whenever a new auth user signs up.
 create or replace function public.handle_new_user()
@@ -336,7 +373,9 @@ create index if not exists split_reminders_share_idx
 -- simple on purpose. Can be replaced with a request/accept flow later.
 -- ----------------------------------------------------------------------------
 create or replace view public.directory as
-  select id, full_name, email, avatar_color from public.profiles;
+  select id, full_name, email, avatar_color
+  from public.profiles
+  where contact_owner_id is null or contact_owner_id = auth.uid();
 
 -- ----------------------------------------------------------------------------
 -- 6. DEFAULT CATEGORY SEEDING

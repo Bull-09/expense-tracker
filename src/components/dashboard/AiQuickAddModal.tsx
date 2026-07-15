@@ -124,6 +124,12 @@ function normalizePersonLookup(value: string) {
     .trim();
 }
 
+function friendDraftName(item: FriendLedgerDraft) {
+  return item.personName?.trim()
+    || item.description?.replace(/\b(borrowed|lent|money|from|to|for|gave|got|paid)\b/gi, ' ').replace(/\s+/g, ' ').trim()
+    || '';
+}
+
 function getSpeechRecognition() {
   if (typeof window === 'undefined') return null;
   const win = window as Window & {
@@ -579,12 +585,14 @@ export function AiQuickAddModal({
         if (!item.amount || item.amount <= 0) {
           throw new Error('Every friend money draft needs a valid amount.');
         }
-        if (!item.personId) {
-          throw new Error('Pick the friend for each friend money draft.');
+        const name = friendDraftName(item);
+        if (!item.personId && !name) {
+          throw new Error('Pick or type the friend for each friend money draft.');
         }
         await createFriendLedgerEntry({
           direction: item.direction,
-          personId: item.personId,
+          personId: item.personId ?? null,
+          personName: name || null,
           amount: item.amount,
           description: item.description,
           occurredOn: item.occurredOn,
@@ -649,12 +657,14 @@ export function AiQuickAddModal({
         if (!item.amount || item.amount <= 0) {
           throw new Error('Every friend money draft needs a valid amount.');
         }
-        if (!item.personId) {
-          throw new Error('Pick the friend for each friend money draft.');
+        const name = friendDraftName(item);
+        if (!item.personId && !name) {
+          throw new Error('Pick or type the friend for each friend money draft.');
         }
         await createFriendLedgerEntry({
           direction: item.direction,
-          personId: item.personId,
+          personId: item.personId ?? null,
+          personName: name || null,
           amount: item.amount,
           description: item.description,
           occurredOn: item.occurredOn,
@@ -966,14 +976,30 @@ export function AiQuickAddModal({
                     <label className="text-sm font-medium text-paper/70">Friend</label>
                     <select
                       value={friendDraft.personId ?? ''}
-                      onChange={(event) => updateFriendDraft({ personId: event.target.value || null })}
+                      onChange={(event) => {
+                        const selected = directory.find((person) => person.id === event.target.value);
+                        updateFriendDraft({
+                          personId: event.target.value || null,
+                          personName: selected?.full_name ?? friendDraft.personName ?? null,
+                        });
+                      }}
                       className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
                     >
-                      <option value="">{friendDraft.personName ? `Find ${friendDraft.personName}` : 'Pick friend'}</option>
+                      <option value="">
+                        {friendDraft.personName ? `Create ${friendDraft.personName} on save` : 'Pick existing friend'}
+                      </option>
                       {directory.filter((person) => person.id !== currentUserId).map((person) => (
                         <option key={person.id} value={person.id}>{person.full_name}</option>
                       ))}
                     </select>
+                    {!friendDraft.personId && (
+                      <Input
+                        label="New friend name"
+                        value={friendDraft.personName ?? ''}
+                        onChange={(event) => updateFriendDraft({ personName: event.target.value })}
+                        placeholder="Rahul"
+                      />
+                    )}
                   </div>
 
                   <Input label="Note" value={friendDraft.description ?? ''} onChange={(event) => updateFriendDraft({ description: event.target.value })} />

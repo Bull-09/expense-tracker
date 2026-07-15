@@ -172,7 +172,8 @@ export async function createTransaction(input: {
 
 export async function createFriendLedgerEntry(input: {
   direction: 'borrowed' | 'lent';
-  personId: string;
+  personId?: string | null;
+  personName?: string | null;
   amount: number;
   description?: string | null;
   occurredOn: string;
@@ -183,12 +184,40 @@ export async function createFriendLedgerEntry(input: {
   if (!input.amount || input.amount <= 0) throw new Error('Enter a valid amount.');
   if (input.personId === user.id) throw new Error('Pick another person.');
 
+  let personId = input.personId ?? null;
+  const personName = input.personName?.trim() ?? '';
+
+  if (!personId && personName) {
+    const { data: existing } = await supabase
+      .from('directory')
+      .select('id, full_name')
+      .ilike('full_name', personName)
+      .maybeSingle();
+
+    if (existing?.id) {
+      personId = existing.id;
+    } else {
+      const { data: newPersonId, error: createContactError } = await supabase
+        .rpc('create_contact_profile', { contact_name: personName });
+      if (createContactError) {
+        if (isMissingSchemaError(createContactError)) {
+          throw new Error('Creating missing friends needs the latest Supabase update. Run supabase/updates/2026-07-16-contact-friends.sql once.');
+        }
+        throw new Error(createContactError.message);
+      }
+      personId = typeof newPersonId === 'string' ? newPersonId : null;
+    }
+  }
+
+  if (!personId) throw new Error('Pick or name the friend for this balance.');
+  if (personId === user.id) throw new Error('Pick another person.');
+
   const { data: person } = await supabase
     .from('profiles')
     .select('id, full_name')
-    .eq('id', input.personId)
+    .eq('id', personId)
     .single();
-  if (!person) throw new Error('Friend not found. Ask them to sign up first.');
+  if (!person) throw new Error('Friend not found. Add their name again and save.');
 
   const borrowed = input.direction === 'borrowed';
   const description = input.description?.trim()
@@ -218,8 +247,8 @@ export async function createFriendLedgerEntry(input: {
 
   const { error: splitError } = await supabase.from('split_shares').insert({
     transaction_id: transaction.id,
-    payer_id: borrowed ? input.personId : user.id,
-    owed_by_id: borrowed ? user.id : input.personId,
+    payer_id: borrowed ? personId : user.id,
+    owed_by_id: borrowed ? user.id : personId,
     amount: input.amount,
   });
 
