@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, CalendarClock, Check, ChevronDown, ChevronUp, HandCoins, Loader2, Mic, Repeat2, Send, Square, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
@@ -69,6 +69,18 @@ type TokenUsage = {
   estimatedTranscriptionCostUsd?: number | null;
   estimatedTotalCostUsd?: number | null;
   pricingNote?: string | null;
+};
+
+type AiResponse = {
+  reply?: string;
+  correctedTranscript?: string;
+  normalizedTranscript?: string;
+  transcript?: string;
+  usage?: TokenUsage | null;
+  drafts?: Draft[];
+  subscriptionDrafts?: SubscriptionDraft[];
+  friendLedgerDrafts?: FriendLedgerDraft[];
+  questions?: string[];
 };
 
 type SpeechRecognitionConstructor = new () => SpeechRecognition;
@@ -220,10 +232,14 @@ export function AiQuickAddModal({
   const [saving, setSaving] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceMode, setVoiceMode] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [processingLabel, setProcessingLabel] = useState('Thinking');
+  const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const aiAbortRef = useRef<AbortController | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const liveVoiceTextRef = useRef('');
   const voiceStartedAtRef = useRef<number | null>(null);
@@ -242,6 +258,10 @@ export function AiQuickAddModal({
   );
   const expenseCategories = categories.filter((category) => category.kind === 'expense');
   const voicePreview = message.trim();
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages, loading, drafts.length, subscriptionDrafts.length, friendLedgerDrafts.length]);
 
   function resolveFriendDraft(item: FriendLedgerDraft): FriendLedgerDraft {
     const friendDirectory = directory.filter((person) => person.id !== currentUserId);
@@ -267,6 +287,40 @@ export function AiQuickAddModal({
       { id, role, text, usage },
     ]);
     return id;
+  }
+
+  function clientStateSnapshot() {
+    return {
+      currentDrafts: drafts.slice(0, 8).map((item) => ({
+        kind: item.kind,
+        amount: item.amount,
+        description: item.description,
+        source: item.source ?? null,
+        occurredOn: item.occurredOn,
+        categoryId: item.categoryId ?? null,
+        suggestedCategoryName: item.suggestedCategoryName ?? null,
+        createCategoryName: item.createCategoryName ?? null,
+        groupId: item.groupId ?? null,
+        split: item.split ?? null,
+      })),
+      currentSubscriptionDrafts: subscriptionDrafts.slice(0, 5),
+      currentFriendLedgerDrafts: friendLedgerDrafts.slice(0, 5),
+      recentMessages: messages.slice(-4).map((item) => ({
+        role: item.role,
+        text: item.text,
+      })),
+    };
+  }
+
+  function applyAiResponse(data: AiResponse) {
+    appendMessage('assistant', assistantReplyText(data), data.usage ?? null);
+    setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
+    setSubscriptionDrafts(data.subscriptionDrafts ?? []);
+    setFriendLedgerDrafts((data.friendLedgerDrafts ?? []).map(resolveFriendDraft));
+    setFollowUpQuestions((data.questions ?? []).filter(Boolean).slice(0, 3));
+    setSelectedDraft(0);
+    setSelectedSubscriptionDraft(0);
+    setSelectedFriendDraft(0);
   }
 
   function updateMessage(id: string, text: string) {
@@ -349,6 +403,7 @@ export function AiQuickAddModal({
     aiAbortRef.current = null;
     setLoading(false);
     setVoiceMode('idle');
+    setProcessingLabel('Thinking');
     setError(null);
     appendMessage('assistant', 'Stopped. Edit your note and send again when ready.');
   }
@@ -358,10 +413,12 @@ export function AiQuickAddModal({
     if (!trimmed || loading) return;
 
     setOpen(true);
-    setMessage('');
     setError(null);
+    setFollowUpQuestions([]);
     appendMessage('user', trimmed);
+    setMessage('');
     setLoading(true);
+    setProcessingLabel('Understanding your note');
     const controller = new AbortController();
     aiAbortRef.current = controller;
 
@@ -369,27 +426,25 @@ export function AiQuickAddModal({
       const response = await fetch('/api/ai/quick-add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ message: trimmed, clientState: clientStateSnapshot() }),
         signal: controller.signal,
       });
+      setProcessingLabel('Making smart drafts');
       const data = await readJsonResponse(response);
       if (!response.ok) throw new Error(data.error ?? 'Could not understand that.');
 
-      appendMessage('assistant', assistantReplyText(data), data.usage ?? null);
-      setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
-      setSubscriptionDrafts(data.subscriptionDrafts ?? []);
-      setFriendLedgerDrafts((data.friendLedgerDrafts ?? []).map(resolveFriendDraft));
-      setSelectedDraft(0);
-      setSelectedSubscriptionDraft(0);
-      setSelectedFriendDraft(0);
+      applyAiResponse(data);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       const text = err instanceof Error ? err.message : 'Could not understand that.';
       setError(text);
+      setMessage(trimmed);
       appendMessage('assistant', text);
     } finally {
       if (aiAbortRef.current === controller) aiAbortRef.current = null;
       setLoading(false);
+      setProcessingLabel('Thinking');
+      textareaRef.current?.focus();
     }
   }
 
@@ -398,8 +453,10 @@ export function AiQuickAddModal({
 
     setOpen(true);
     setError(null);
+    setFollowUpQuestions([]);
     setLoading(true);
     setVoiceMode('transcribing');
+    setProcessingLabel('Correcting voice');
 
     const shownText = visibleTranscript.trim() || 'Voice note';
     const voiceMessageId = appendMessage('user', shownText);
@@ -410,6 +467,7 @@ export function AiQuickAddModal({
       const formData = new FormData();
       formData.append('audio', audio, 'c137-voice.webm');
       formData.append('durationMs', String(Math.max(0, Math.round(durationMs))));
+      formData.append('clientState', JSON.stringify(clientStateSnapshot()));
       if (visibleTranscript.trim()) formData.append('message', visibleTranscript.trim());
 
       const response = await fetch('/api/ai/quick-add', {
@@ -417,6 +475,7 @@ export function AiQuickAddModal({
         body: formData,
         signal: controller.signal,
       });
+      setProcessingLabel('Making smart drafts');
       const data = await readJsonResponse(response);
       if (!response.ok) throw new Error(data.error ?? 'Could not understand that voice note.');
 
@@ -424,13 +483,7 @@ export function AiQuickAddModal({
       if (typeof cleanedTranscript === 'string' && cleanedTranscript.trim()) {
         updateMessage(voiceMessageId, cleanedTranscript.trim());
       }
-      appendMessage('assistant', assistantReplyText(data), data.usage ?? null);
-      setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
-      setSubscriptionDrafts(data.subscriptionDrafts ?? []);
-      setFriendLedgerDrafts((data.friendLedgerDrafts ?? []).map(resolveFriendDraft));
-      setSelectedDraft(0);
-      setSelectedSubscriptionDraft(0);
-      setSelectedFriendDraft(0);
+      applyAiResponse(data);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       const text = err instanceof Error ? err.message : 'Could not understand that voice note.';
@@ -440,6 +493,8 @@ export function AiQuickAddModal({
       if (aiAbortRef.current === controller) aiAbortRef.current = null;
       setLoading(false);
       setVoiceMode('idle');
+      setProcessingLabel('Thinking');
+      textareaRef.current?.focus();
     }
   }
 
@@ -568,6 +623,7 @@ export function AiQuickAddModal({
       }
       appendMessage('assistant', drafts.length === 1 ? 'Saved it.' : `Saved ${drafts.length} entries.`);
       setDrafts([]);
+      setFollowUpQuestions([]);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save drafts.');
@@ -597,6 +653,7 @@ export function AiQuickAddModal({
       }
       appendMessage('assistant', subscriptionDrafts.length === 1 ? 'Subscription saved.' : `Saved ${subscriptionDrafts.length} subscriptions.`);
       setSubscriptionDrafts([]);
+      setFollowUpQuestions([]);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save subscriptions.');
@@ -628,6 +685,7 @@ export function AiQuickAddModal({
       }
       appendMessage('assistant', friendLedgerDrafts.length === 1 ? 'Friend balance saved.' : `Saved ${friendLedgerDrafts.length} friend balances.`);
       setFriendLedgerDrafts([]);
+      setFollowUpQuestions([]);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save friend money drafts.');
@@ -703,6 +761,7 @@ export function AiQuickAddModal({
       setDrafts([]);
       setSubscriptionDrafts([]);
       setFriendLedgerDrafts([]);
+      setFollowUpQuestions([]);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save everything.');
@@ -758,7 +817,7 @@ export function AiQuickAddModal({
               {loading && (
                 <div className="mr-auto flex items-center gap-2 rounded-2xl bg-ink px-3 py-2 text-sm text-paper/50">
                   <Loader2 size={14} className="animate-spin" />
-                  <span>{voiceMode === 'transcribing' ? 'Correcting voice' : 'Thinking'}</span>
+                  <span>{processingLabel}</span>
                   <button
                     type="button"
                     onClick={stopAiResponse}
@@ -768,7 +827,24 @@ export function AiQuickAddModal({
                   </button>
                 </div>
               )}
+              <div ref={messagesEndRef} />
             </div>
+
+            {followUpQuestions.length > 0 && (
+              <div className="mb-3 rounded-xl border border-gold/30 bg-gold/10 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gold">Needs one detail</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {followUpQuestions.map((question) => (
+                    <span
+                      key={question}
+                      className="rounded-full border border-gold/30 bg-ink/70 px-3 py-1.5 text-xs font-medium text-paper/75"
+                    >
+                      {question}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {(drafts.length > 0 || subscriptionDrafts.length > 0 || friendLedgerDrafts.length > 0)
               && [drafts.length, subscriptionDrafts.length, friendLedgerDrafts.length].filter(Boolean).length > 1 && (
@@ -1200,6 +1276,7 @@ export function AiQuickAddModal({
 
           <div className="flex items-end gap-2">
             <textarea
+              ref={textareaRef}
               value={message}
               onFocus={() => setOpen(true)}
               onChange={(event) => setMessage(event.target.value)}

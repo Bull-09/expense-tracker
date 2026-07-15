@@ -66,7 +66,7 @@ function normalizeDraftDate(date: unknown, today: string, transcript: string) {
 
 function looksLikeFriendMoneyDraft(draft: ParsedDraft) {
   const text = `${draft.description ?? ''} ${draft.source ?? ''}`.toLowerCase();
-  return /\b(borrowed|borrow|took money|take money|lent|lend|gave money|udhaar|loaned)\b/.test(text);
+  return /\b(borrowed|borrow|took money|take money|lent|lend|gave money|gave|paid for|udhaar|loaned)\b/.test(text);
 }
 
 function looksLikeSubscriptionDraft(draft: ParsedDraft) {
@@ -202,6 +202,14 @@ function normalizeTranscript(input: string) {
     .replace(/\bswiggy\b/gi, 'Swiggy')
     .replace(/\bzomato\b/gi, 'Zomato')
     .replace(/\bblink it\b/gi, 'Blinkit')
+    .replace(/\bmeeta\b/gi, 'Meta')
+    .replace(/\bmeta adds\b/gi, 'Meta Ads')
+    .replace(/\bgoogle adds\b/gi, 'Google Ads')
+    .replace(/\bcreditcard\b/gi, 'credit card')
+    .replace(/\bcred card\b/gi, 'credit card')
+    .replace(/\bphonepe\b/gi, 'PhonePe')
+    .replace(/\bgpay\b/gi, 'GPay')
+    .replace(/\bpaytm\b/gi, 'Paytm')
     .replace(/\bsplit between\b/gi, 'split with')
     .replace(/\bdivide with\b/gi, 'split with')
     .replace(/\bshared with\b/gi, 'split with')
@@ -313,6 +321,9 @@ function friendLedgerFallbackDraft(rawTranscript: string, normalizedTranscript: 
 
 function cheapReply(transcript: string) {
   const text = transcript.trim().toLowerCase();
+  const hasMoneySignal = /\b(\d|rupees|rs|spent|paid|got|received|earned|borrowed|lent|gave|subscription|monthly|weekly|split|owe|udhaar|emi|income|expense)\b/.test(text);
+  if (hasMoneySignal) return null;
+
   if (/^(hi|hello|hey|yo|namaste|sup)\b/.test(text)) {
     return 'Hey, tell me what you spent, earned, or want to check.';
   }
@@ -365,6 +376,23 @@ function humanDraftReply({
   }
 
   return cleanReply || 'I am here. Ask me anything, or tell me a money note to add.';
+}
+
+function fallbackQuestions(transcript: string) {
+  const text = transcript.toLowerCase();
+  const questions: string[] = [];
+
+  if (!moneyAmountFromText(transcript) && /\b(spent|paid|got|received|borrowed|lent|gave|subscription|emi)\b/.test(text)) {
+    questions.push('How much was it?');
+  }
+  if (/\b(split|borrowed|lent|gave|took money|udhaar)\b/.test(text) && !/\b(from|to|with)\s+[a-z]/i.test(transcript)) {
+    questions.push('Who was the person?');
+  }
+  if (/\b(subscription|emi|recurring)\b/.test(text) && !/\b(monthly|weekly|every month|every week)\b/.test(text)) {
+    questions.push('Is this monthly or weekly?');
+  }
+
+  return questions.slice(0, 2);
 }
 
 function categoryExistsForKind(
@@ -456,6 +484,7 @@ export async function POST(request: Request) {
     let transcript = '';
     let audio: File | null = null;
     let voiceDurationMs = 0;
+    let clientState: unknown = null;
 
     if (contentType.includes('multipart/form-data')) {
       const form = await request.formData();
@@ -476,9 +505,18 @@ export async function POST(request: Request) {
       if (typeof duration === 'string') {
         voiceDurationMs = Math.max(0, Number(duration) || 0);
       }
+      const currentState = form.get('clientState');
+      if (typeof currentState === 'string') {
+        try {
+          clientState = JSON.parse(currentState);
+        } catch {
+          clientState = null;
+        }
+      }
     } else {
       const body = await request.json().catch(() => null);
       transcript = typeof body?.message === 'string' ? body.message : '';
+      clientState = body?.clientState ?? null;
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -497,9 +535,10 @@ export async function POST(request: Request) {
           'Indian English and Hinglish expense tracker voice note.',
           'Correct obvious speech recognition mistakes into clean readable money notes.',
           'Examples: cigger/cigg/sutta means cigarette or smoke, montly means monthly, udhar/udhaar means borrowed/lent money.',
-          'Common words: rupees, chai, sutta, smoke, cigarette, petrol, cab, Uber, Ola, Swiggy, Zomato, Blinkit.',
-          'Money actions: spent, paid, got, received, borrowed, lent, udhaar, split, subscription, monthly.',
+          'Common words: rupees, chai, sutta, smoke, cigarette, petrol, cab, Uber, Ola, Swiggy, Zomato, Blinkit, Meta Ads, Google Ads, PhonePe, GPay, Paytm.',
+          'Money actions: spent, paid, got, received, borrowed, lent, udhaar, split, subscription, monthly, EMI.',
           'Preserve names of friends, vendors, apps, and amounts.',
+          'Prefer clean grammar, but do not invent missing amounts or people.',
         ].join(' '),
       });
       transcript = transcription.text || transcript;
@@ -512,7 +551,7 @@ export async function POST(request: Request) {
     const today = format(new Date(), 'yyyy-MM-dd');
 
     const deterministicFriendDraft = friendLedgerFallbackDraft(correctedTranscript, normalizedTranscript, today);
-    if (deterministicFriendDraft) {
+    if (deterministicFriendDraft && !apiKey) {
       return Response.json({
         transcript,
         correctedTranscript,
@@ -521,6 +560,7 @@ export async function POST(request: Request) {
         drafts: [],
         subscriptionDrafts: [],
         friendLedgerDrafts: [deterministicFriendDraft],
+        questions: [],
         usage: null,
       });
     }
@@ -535,6 +575,7 @@ export async function POST(request: Request) {
         drafts: [],
         subscriptionDrafts: [],
         friendLedgerDrafts: [],
+        questions: [],
       });
     }
 
@@ -547,10 +588,25 @@ export async function POST(request: Request) {
         drafts: [],
         subscriptionDrafts: [],
         friendLedgerDrafts: [],
+        questions: [],
       });
     }
 
     if (!apiKey || !openai) {
+      if (deterministicFriendDraft) {
+        return Response.json({
+          transcript,
+          correctedTranscript,
+          normalizedTranscript,
+          reply: 'I made 1 friend balance. It will be saved in Splits. Review it, then save.',
+          drafts: [],
+          subscriptionDrafts: [],
+          friendLedgerDrafts: [deterministicFriendDraft],
+          questions: [],
+          usage: null,
+        });
+      }
+
       return jsonError('AI is not configured. Add OPENAI_API_KEY in Vercel, then redeploy.', 503);
     }
 
@@ -638,6 +694,9 @@ export async function POST(request: Request) {
             'Do not also create a normal expense draft for a subscription unless the user clearly says it was paid today.',
             'For subscription frequency, use weekly for every week/weekly and monthly for every month/monthly. Default to monthly.',
             'For subscription billingDay, infer day of month if mentioned, otherwise use today day.',
+            'If amount, person, date, category, subscription frequency, or entry type is missing, ask one short question in top-level questions.',
+            'If the user is clarifying a previous draft, reply as a clarification and return the corrected draft shape.',
+            'Use clientState.currentDrafts, currentSubscriptionDrafts, and currentFriendLedgerDrafts when the user says words like this, that, change, make it, correct it, or actually.',
             'If unsure, keep confidence lower and add short questions.',
           ].join('\n'),
         },
@@ -648,8 +707,10 @@ export async function POST(request: Request) {
             rawTranscript: transcript,
             correctedTranscript,
             transcript: normalizedTranscript,
+            clientState,
             outputShape: {
               reply: 'short friendly assistant reply',
+              questions: ['1-2 short follow-up questions if details are missing'],
               drafts: [
                 {
                   kind: 'expense | income | investment',
@@ -719,11 +780,27 @@ export async function POST(request: Request) {
 
     const parsed = extractJson(content) as {
       reply?: string;
+      questions?: string[];
       drafts?: ParsedDraft[];
       subscriptionDrafts?: ParsedSubscriptionDraft[];
       friendLedgerDrafts?: ParsedFriendLedgerDraft[];
     };
     const rawDrafts = parsed.drafts ?? [];
+    const friendLedgerFallbacks = rawDrafts
+      .filter((draft) => looksLikeFriendMoneyDraft(draft))
+      .map((draft) => {
+        const text = `${draft.description ?? ''} ${draft.source ?? ''}`;
+        const fallback = friendLedgerFallbackDraft(text, normalizeTranscript(text), today);
+        if (!fallback) return null;
+
+        return {
+          ...fallback,
+          amount: fallback.amount ?? (typeof draft.amount === 'number' ? draft.amount : null),
+          occurredOn: normalizeDraftDate(draft.occurredOn, today, normalizedTranscript),
+          confidence: Math.max(fallback.confidence, typeof draft.confidence === 'number' ? draft.confidence : 0),
+        };
+      })
+      .filter((draft): draft is ParsedFriendLedgerDraft => Boolean(draft));
     const subscriptionFallbacks = rawDrafts
       .filter((draft) => !looksLikeFriendMoneyDraft(draft) && looksLikeSubscriptionDraft(draft))
       .map((draft) => {
@@ -775,7 +852,7 @@ export async function POST(request: Request) {
           questions: draft.questions ?? [],
         };
       });
-    const friendLedgerDrafts = (parsed.friendLedgerDrafts ?? []).map((draft) => ({
+    const friendLedgerDrafts = [...(parsed.friendLedgerDrafts ?? []), ...friendLedgerFallbacks].map((draft) => ({
       direction: draft.direction === 'lent' ? 'lent' : 'borrowed',
       amount: typeof draft.amount === 'number' ? draft.amount : null,
       personId: findDirectoryPerson(draft.personId, draft.personName),
@@ -816,12 +893,26 @@ export async function POST(request: Request) {
       subscriptionDraftsCount: subscriptionDrafts.length,
       friendLedgerDraftsCount: friendLedgerDrafts.length,
     });
+    const questions = [
+      ...(Array.isArray(parsed.questions) ? parsed.questions : []),
+      ...drafts.flatMap((draft) => draft.questions ?? []),
+      ...subscriptionDrafts.flatMap((draft) => draft.questions ?? []),
+      ...friendLedgerDrafts.flatMap((draft) => draft.questions ?? []),
+      ...(drafts.length === 0 && subscriptionDrafts.length === 0 && friendLedgerDrafts.length === 0 ? fallbackQuestions(normalizedTranscript) : []),
+    ]
+      .map((question) => question.trim())
+      .filter(Boolean)
+      .filter((question, index, all) => all.indexOf(question) === index)
+      .slice(0, 3);
+    const responseReply = questions.length > 0 && drafts.length === 0 && subscriptionDrafts.length === 0 && friendLedgerDrafts.length === 0
+      ? 'I need one detail before I can make the draft.'
+      : reply;
 
     return Response.json({
       transcript,
       correctedTranscript,
       normalizedTranscript,
-      reply,
+      reply: responseReply,
       usage: completion.usage ? {
         model: completion.model,
         promptTokens: completion.usage.prompt_tokens,
@@ -835,6 +926,7 @@ export async function POST(request: Request) {
       drafts,
       subscriptionDrafts,
       friendLedgerDrafts,
+      questions,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'AI request failed.';
