@@ -247,6 +247,36 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
+function humanDraftReply({
+  reply,
+  draftsCount,
+  subscriptionDraftsCount,
+  friendLedgerDraftsCount,
+}: {
+  reply?: string;
+  draftsCount: number;
+  subscriptionDraftsCount: number;
+  friendLedgerDraftsCount: number;
+}) {
+  const cleanReply = reply?.trim();
+  const hasDrafts = draftsCount > 0 || subscriptionDraftsCount > 0 || friendLedgerDraftsCount > 0;
+  const weakReply = !cleanReply || /^(got it|done|ok|okay|sure)[.!]*$/i.test(cleanReply);
+
+  if (!weakReply) return cleanReply;
+
+  const parts = [
+    draftsCount ? `${draftsCount} entr${draftsCount === 1 ? 'y' : 'ies'}` : '',
+    subscriptionDraftsCount ? `${subscriptionDraftsCount} subscription${subscriptionDraftsCount === 1 ? '' : 's'}` : '',
+    friendLedgerDraftsCount ? `${friendLedgerDraftsCount} friend balance${friendLedgerDraftsCount === 1 ? '' : 's'}` : '',
+  ].filter(Boolean);
+
+  if (hasDrafts) {
+    return `I made ${parts.join(', ')}. Review it, then save.`;
+  }
+
+  return cleanReply || 'I am here. Ask me anything, or tell me a money note to add.';
+}
+
 function isOutstandingQuestion(transcript: string) {
   const text = transcript.trim().toLowerCase();
   const asksForStatus = /\b(who|how much|kitna|kya|show|list|tell|pending|outstanding|balance|balances|summary)\b/.test(text);
@@ -605,12 +635,18 @@ export async function POST(request: Request) {
       })),
       ...subscriptionFallbacks,
     ];
+    const reply = humanDraftReply({
+      reply: parsed.reply,
+      draftsCount: drafts.length,
+      subscriptionDraftsCount: subscriptionDrafts.length,
+      friendLedgerDraftsCount: friendLedgerDrafts.length,
+    });
 
     return Response.json({
       transcript,
       correctedTranscript,
       normalizedTranscript,
-      reply: parsed.reply ?? (drafts.length > 0 || subscriptionDrafts.length > 0 || friendLedgerDrafts.length > 0 ? 'I made a draft. Review it before saving.' : 'Got it.'),
+      reply,
       usage: completion.usage ? {
         model: completion.model,
         promptTokens: completion.usage.prompt_tokens,

@@ -162,6 +162,29 @@ function formatTokenUsage(usage: TokenUsage) {
   return `${total}${parts}${estimate}${voice}`;
 }
 
+function assistantReplyText(data: {
+  reply?: string;
+  drafts?: unknown[];
+  subscriptionDrafts?: unknown[];
+  friendLedgerDrafts?: unknown[];
+}) {
+  const reply = data.reply?.trim();
+  const weakReply = !reply || /^(got it|done|ok|okay|sure)[.!]*$/i.test(reply);
+  if (!weakReply) return reply;
+
+  const drafts = data.drafts?.length ?? 0;
+  const subscriptions = data.subscriptionDrafts?.length ?? 0;
+  const friends = data.friendLedgerDrafts?.length ?? 0;
+  const parts = [
+    drafts ? `${drafts} entr${drafts === 1 ? 'y' : 'ies'}` : '',
+    subscriptions ? `${subscriptions} subscription${subscriptions === 1 ? '' : 's'}` : '',
+    friends ? `${friends} friend balance${friends === 1 ? '' : 's'}` : '',
+  ].filter(Boolean);
+
+  if (parts.length > 0) return `I made ${parts.join(', ')}. Review it, then save.`;
+  return reply || 'I am here. Ask me anything, or tell me a money note to add.';
+}
+
 export function AiQuickAddModal({
   categories,
   directory,
@@ -349,7 +372,7 @@ export function AiQuickAddModal({
       const data = await readJsonResponse(response);
       if (!response.ok) throw new Error(data.error ?? 'Could not understand that.');
 
-      appendMessage('assistant', data.reply ?? 'Done.', data.usage ?? null);
+      appendMessage('assistant', assistantReplyText(data), data.usage ?? null);
       setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
       setSubscriptionDrafts(data.subscriptionDrafts ?? []);
       setFriendLedgerDrafts((data.friendLedgerDrafts ?? []).map(resolveFriendDraft));
@@ -398,7 +421,7 @@ export function AiQuickAddModal({
       if (typeof cleanedTranscript === 'string' && cleanedTranscript.trim()) {
         updateMessage(voiceMessageId, cleanedTranscript.trim());
       }
-      appendMessage('assistant', data.reply ?? 'Done.', data.usage ?? null);
+      appendMessage('assistant', assistantReplyText(data), data.usage ?? null);
       setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
       setSubscriptionDrafts(data.subscriptionDrafts ?? []);
       setFriendLedgerDrafts((data.friendLedgerDrafts ?? []).map(resolveFriendDraft));
