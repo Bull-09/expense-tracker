@@ -116,6 +116,14 @@ function normalizeIncomingDraft(item: Draft): Draft {
   };
 }
 
+function normalizePersonLookup(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function getSpeechRecognition() {
   if (typeof window === 'undefined') return null;
   const win = window as Window & {
@@ -202,6 +210,21 @@ export function AiQuickAddModal({
   );
   const expenseCategories = categories.filter((category) => category.kind === 'expense');
   const voicePreview = message.trim();
+
+  function resolveFriendDraft(item: FriendLedgerDraft): FriendLedgerDraft {
+    if (item.personId && directory.some((person) => person.id === item.personId)) return item;
+    const lookup = normalizePersonLookup(item.personName ?? item.description ?? '');
+    if (!lookup) return item;
+
+    const exact = directory.find((person) => normalizePersonLookup(person.full_name) === lookup);
+    const lookupParts = lookup.split(' ').filter(Boolean);
+    const partial = exact ?? directory.find((person) => {
+      const nameParts = normalizePersonLookup(person.full_name).split(' ');
+      return lookupParts.some((part) => nameParts.includes(part));
+    });
+
+    return partial ? { ...item, personId: partial.id, personName: partial.full_name } : item;
+  }
 
   function appendMessage(role: ChatMessage['role'], text: string, usage?: TokenUsage | null) {
     const id = `${role}-${Date.now()}-${Math.random()}`;
@@ -321,7 +344,7 @@ export function AiQuickAddModal({
       appendMessage('assistant', data.reply ?? 'Done.', data.usage ?? null);
       setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
       setSubscriptionDrafts(data.subscriptionDrafts ?? []);
-      setFriendLedgerDrafts(data.friendLedgerDrafts ?? []);
+      setFriendLedgerDrafts((data.friendLedgerDrafts ?? []).map(resolveFriendDraft));
       setSelectedDraft(0);
       setSelectedSubscriptionDraft(0);
       setSelectedFriendDraft(0);
@@ -370,7 +393,7 @@ export function AiQuickAddModal({
       appendMessage('assistant', data.reply ?? 'Done.', data.usage ?? null);
       setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
       setSubscriptionDrafts(data.subscriptionDrafts ?? []);
-      setFriendLedgerDrafts(data.friendLedgerDrafts ?? []);
+      setFriendLedgerDrafts((data.friendLedgerDrafts ?? []).map(resolveFriendDraft));
       setSelectedDraft(0);
       setSelectedSubscriptionDraft(0);
       setSelectedFriendDraft(0);

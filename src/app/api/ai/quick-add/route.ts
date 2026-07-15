@@ -82,6 +82,14 @@ function subscriptionNameFromDraft(draft: ParsedDraft) {
   return text || draft.source || draft.description || 'Subscription';
 }
 
+function normalizePersonLookup(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 type ParsedFriendLedgerDraft = {
   direction: 'borrowed' | 'lent';
   amount: number | null;
@@ -376,6 +384,21 @@ export async function POST(request: Request) {
       getDirectory(),
       getGroups(),
     ]);
+    const findDirectoryPerson = (personId?: string | null, personName?: string | null) => {
+      if (personId && directory.some((person) => person.id === personId)) return personId;
+      const lookup = normalizePersonLookup(personName ?? '');
+      if (!lookup) return null;
+
+      const exact = directory.find((person) => normalizePersonLookup(person.full_name) === lookup);
+      if (exact) return exact.id;
+
+      const lookupParts = lookup.split(' ').filter(Boolean);
+      const partial = directory.find((person) => {
+        const name = normalizePersonLookup(person.full_name);
+        return lookupParts.some((part) => name.split(' ').includes(part));
+      });
+      return partial?.id ?? null;
+    };
 
     const today = format(new Date(), 'yyyy-MM-dd');
     const context = {
@@ -559,7 +582,7 @@ export async function POST(request: Request) {
     const friendLedgerDrafts = (parsed.friendLedgerDrafts ?? []).map((draft) => ({
       direction: draft.direction === 'lent' ? 'lent' : 'borrowed',
       amount: typeof draft.amount === 'number' ? draft.amount : null,
-      personId: draft.personId ?? null,
+      personId: findDirectoryPerson(draft.personId, draft.personName),
       personName: draft.personName ?? null,
       description: draft.description ?? '',
       occurredOn: normalizeDraftDate(draft.occurredOn, today, normalizedTranscript),
