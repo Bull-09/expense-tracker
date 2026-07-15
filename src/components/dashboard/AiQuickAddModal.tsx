@@ -57,6 +57,14 @@ type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   text: string;
+  usage?: TokenUsage | null;
+};
+
+type TokenUsage = {
+  model?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
 };
 
 type SpeechRecognitionConstructor = new () => SpeechRecognition;
@@ -166,11 +174,11 @@ export function AiQuickAddModal({
   const expenseCategories = categories.filter((category) => category.kind === 'expense');
   const voicePreview = message.trim();
 
-  function appendMessage(role: ChatMessage['role'], text: string) {
+  function appendMessage(role: ChatMessage['role'], text: string, usage?: TokenUsage | null) {
     const id = `${role}-${Date.now()}-${Math.random()}`;
     setMessages((current) => [
       ...current.slice(-5),
-      { id, role, text },
+      { id, role, text, usage },
     ]);
     return id;
   }
@@ -269,7 +277,7 @@ export function AiQuickAddModal({
       const data = await readJsonResponse(response);
       if (!response.ok) throw new Error(data.error ?? 'Could not understand that.');
 
-      appendMessage('assistant', data.reply ?? 'Done.');
+      appendMessage('assistant', data.reply ?? 'Done.', data.usage ?? null);
       setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
       setSubscriptionDrafts(data.subscriptionDrafts ?? []);
       setFriendLedgerDrafts(data.friendLedgerDrafts ?? []);
@@ -312,7 +320,7 @@ export function AiQuickAddModal({
       if (typeof cleanedTranscript === 'string' && cleanedTranscript.trim()) {
         updateMessage(voiceMessageId, cleanedTranscript.trim());
       }
-      appendMessage('assistant', data.reply ?? 'Done.');
+      appendMessage('assistant', data.reply ?? 'Done.', data.usage ?? null);
       setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
       setSubscriptionDrafts(data.subscriptionDrafts ?? []);
       setFriendLedgerDrafts(data.friendLedgerDrafts ?? []);
@@ -623,7 +631,15 @@ export function AiQuickAddModal({
                       : 'mr-auto bg-ink text-paper/75'
                   )}
                 >
-                  {item.text}
+                  <span>{item.text}</span>
+                  {item.role === 'assistant' && item.usage?.totalTokens && (
+                    <span className="mt-1 block border-t border-paper/10 pt-1 text-[10px] font-medium text-paper/35">
+                      {item.usage.totalTokens.toLocaleString('en-IN')} tokens
+                      {typeof item.usage.promptTokens === 'number' && typeof item.usage.completionTokens === 'number'
+                        ? ` (${item.usage.promptTokens.toLocaleString('en-IN')} in / ${item.usage.completionTokens.toLocaleString('en-IN')} out)`
+                        : ''}
+                    </span>
+                  )}
                 </div>
               ))}
               {loading && (

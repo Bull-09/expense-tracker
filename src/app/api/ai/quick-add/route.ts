@@ -539,6 +539,12 @@ export async function POST(request: Request) {
       correctedTranscript,
       normalizedTranscript,
       reply: parsed.reply ?? (drafts.length > 0 || subscriptionDrafts.length > 0 || friendLedgerDrafts.length > 0 ? 'I made a draft. Review it before saving.' : 'Got it.'),
+      usage: completion.usage ? {
+        model: completion.model,
+        promptTokens: completion.usage.prompt_tokens,
+        completionTokens: completion.usage.completion_tokens,
+        totalTokens: completion.usage.total_tokens,
+      } : null,
       drafts,
       subscriptionDrafts,
       friendLedgerDrafts,
