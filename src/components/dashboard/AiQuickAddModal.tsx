@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Bot, CalendarClock, Check, ChevronDown, ChevronUp, HandCoins, Loader2, Mic, Repeat2, Send, Square } from 'lucide-react';
+import { Bot, CalendarClock, Check, ChevronDown, ChevronUp, HandCoins, Loader2, Mic, Repeat2, Send, Square, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -184,6 +184,33 @@ export function AiQuickAddModal({
         ...(draft.split ?? {}),
         ...patch,
       },
+    });
+  }
+
+  function removeDraft(indexToRemove: number) {
+    setDrafts((current) => current.filter((_, index) => index !== indexToRemove));
+    setSelectedDraft((current) => {
+      if (current > indexToRemove) return current - 1;
+      if (current === indexToRemove) return Math.max(0, current - 1);
+      return current;
+    });
+  }
+
+  function removeFriendDraft(indexToRemove: number) {
+    setFriendLedgerDrafts((current) => current.filter((_, index) => index !== indexToRemove));
+    setSelectedFriendDraft((current) => {
+      if (current > indexToRemove) return current - 1;
+      if (current === indexToRemove) return Math.max(0, current - 1);
+      return current;
+    });
+  }
+
+  function removeSubscriptionDraft(indexToRemove: number) {
+    setSubscriptionDrafts((current) => current.filter((_, index) => index !== indexToRemove));
+    setSelectedSubscriptionDraft((current) => {
+      if (current > indexToRemove) return current - 1;
+      if (current === indexToRemove) return Math.max(0, current - 1);
+      return current;
     });
   }
 
@@ -607,17 +634,29 @@ export function AiQuickAddModal({
               <div className="mb-3 rounded-xl border border-emerald/30 bg-emerald/5 p-3">
                 <div className="mb-3 flex flex-wrap gap-2">
                   {drafts.map((item, index) => (
-                    <button
+                    <span
                       key={index}
-                      type="button"
-                      onClick={() => setSelectedDraft(index)}
                       className={cn(
-                        'rounded-full border px-3 py-1 text-xs font-medium',
+                        'inline-flex items-center overflow-hidden rounded-full border text-xs font-medium',
                         selectedDraft === index ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/50'
                       )}
                     >
-                      Draft {index + 1}: {item.amount ? `₹${item.amount}` : 'Needs amount'}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDraft(index)}
+                        className="px-3 py-1"
+                      >
+                        Draft {index + 1}: {item.amount ? `₹${item.amount}` : 'Needs amount'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeDraft(index)}
+                        className="border-l border-current/15 px-2 py-1 text-current/70 hover:text-clay"
+                        aria-label={`Delete draft ${index + 1}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
                   ))}
                 </div>
 
@@ -750,17 +789,29 @@ export function AiQuickAddModal({
 
                 <div className="mb-3 flex flex-wrap gap-2">
                   {friendLedgerDrafts.map((item, index) => (
-                    <button
+                    <span
                       key={index}
-                      type="button"
-                      onClick={() => setSelectedFriendDraft(index)}
                       className={cn(
-                        'rounded-full border px-3 py-1 text-xs font-medium',
+                        'inline-flex items-center overflow-hidden rounded-full border text-xs font-medium',
                         selectedFriendDraft === index ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/50'
                       )}
                     >
-                      Friend {index + 1}: {item.amount ? `₹${item.amount}` : 'Needs amount'}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFriendDraft(index)}
+                        className="px-3 py-1"
+                      >
+                        Friend {index + 1}: {item.amount ? `₹${item.amount}` : 'Needs amount'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeFriendDraft(index)}
+                        className="border-l border-current/15 px-2 py-1 text-current/70 hover:text-clay"
+                        aria-label={`Delete friend draft ${index + 1}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
                   ))}
                 </div>
 
@@ -830,17 +881,29 @@ export function AiQuickAddModal({
 
                 <div className="mb-3 flex flex-wrap gap-2">
                   {subscriptionDrafts.map((item, index) => (
-                    <button
+                    <span
                       key={index}
-                      type="button"
-                      onClick={() => setSelectedSubscriptionDraft(index)}
                       className={cn(
-                        'rounded-full border px-3 py-1 text-xs font-medium',
+                        'inline-flex items-center overflow-hidden rounded-full border text-xs font-medium',
                         selectedSubscriptionDraft === index ? 'border-gold bg-gold/15 text-gold' : 'border-ink-border text-paper/50'
                       )}
                     >
-                      Sub {index + 1}: {item.amount ? `₹${item.amount}` : 'Needs amount'}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSubscriptionDraft(index)}
+                        className="px-3 py-1"
+                      >
+                        Sub {index + 1}: {item.amount ? `₹${item.amount}` : 'Needs amount'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeSubscriptionDraft(index)}
+                        className="border-l border-current/15 px-2 py-1 text-current/70 hover:text-clay"
+                        aria-label={`Delete subscription draft ${index + 1}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
                   ))}
                 </div>
 
