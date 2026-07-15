@@ -156,6 +156,7 @@ export function AiQuickAddModal({
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const aiAbortRef = useRef<AbortController | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const liveVoiceTextRef = useRef('');
 
@@ -258,6 +259,15 @@ export function AiQuickAddModal({
     }
   }
 
+  function stopAiResponse() {
+    aiAbortRef.current?.abort();
+    aiAbortRef.current = null;
+    setLoading(false);
+    setVoiceMode('idle');
+    setError(null);
+    appendMessage('assistant', 'Stopped. Edit your note and send again when ready.');
+  }
+
   async function sendMessage(text: string) {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
@@ -267,12 +277,15 @@ export function AiQuickAddModal({
     setError(null);
     appendMessage('user', trimmed);
     setLoading(true);
+    const controller = new AbortController();
+    aiAbortRef.current = controller;
 
     try {
       const response = await fetch('/api/ai/quick-add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: trimmed }),
+        signal: controller.signal,
       });
       const data = await readJsonResponse(response);
       if (!response.ok) throw new Error(data.error ?? 'Could not understand that.');
@@ -285,10 +298,12 @@ export function AiQuickAddModal({
       setSelectedSubscriptionDraft(0);
       setSelectedFriendDraft(0);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       const text = err instanceof Error ? err.message : 'Could not understand that.';
       setError(text);
       appendMessage('assistant', text);
     } finally {
+      if (aiAbortRef.current === controller) aiAbortRef.current = null;
       setLoading(false);
     }
   }
@@ -303,6 +318,8 @@ export function AiQuickAddModal({
 
     const shownText = visibleTranscript.trim() || 'Voice note';
     const voiceMessageId = appendMessage('user', shownText);
+    const controller = new AbortController();
+    aiAbortRef.current = controller;
 
     try {
       const formData = new FormData();
@@ -312,6 +329,7 @@ export function AiQuickAddModal({
       const response = await fetch('/api/ai/quick-add', {
         method: 'POST',
         body: formData,
+        signal: controller.signal,
       });
       const data = await readJsonResponse(response);
       if (!response.ok) throw new Error(data.error ?? 'Could not understand that voice note.');
@@ -328,10 +346,12 @@ export function AiQuickAddModal({
       setSelectedSubscriptionDraft(0);
       setSelectedFriendDraft(0);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       const text = err instanceof Error ? err.message : 'Could not understand that voice note.';
       setError(text);
       appendMessage('assistant', text);
     } finally {
+      if (aiAbortRef.current === controller) aiAbortRef.current = null;
       setLoading(false);
       setVoiceMode('idle');
     }
@@ -645,7 +665,14 @@ export function AiQuickAddModal({
               {loading && (
                 <div className="mr-auto flex items-center gap-2 rounded-2xl bg-ink px-3 py-2 text-sm text-paper/50">
                   <Loader2 size={14} className="animate-spin" />
-                  {voiceMode === 'transcribing' ? 'Correcting voice' : 'Thinking'}
+                  <span>{voiceMode === 'transcribing' ? 'Correcting voice' : 'Thinking'}</span>
+                  <button
+                    type="button"
+                    onClick={stopAiResponse}
+                    className="ml-1 rounded-full border border-clay/40 px-2 py-0.5 text-xs font-semibold text-clay hover:bg-clay/10"
+                  >
+                    Stop
+                  </button>
                 </div>
               )}
             </div>
