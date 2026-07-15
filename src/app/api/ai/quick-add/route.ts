@@ -47,6 +47,7 @@ type ParsedSubscriptionDraft = {
   name: string;
   amount: number | null;
   billingDay?: number | null;
+  frequency?: 'weekly' | 'monthly' | null;
   nextDueOn?: string | null;
   categoryId?: string | null;
   groupId?: string | null;
@@ -346,8 +347,9 @@ export async function POST(request: Request) {
             'Use friendLedgerDrafts only when a friend/person is involved in lending or borrowing, not for shops, vendors, salary, or refunds.',
             'For vendor/shop payments, return normal expense drafts and keep the vendor or merchant name in description for history search.',
             'If no category ID matches well, suggest a short category name in suggestedCategoryName.',
-            'If the user mentions subscriptions, recurring payments, renewals, EMI, rent, membership, or every month, return subscriptionDrafts.',
+            'If the user mentions subscriptions, recurring payments, renewals, EMI, rent, membership, every week, or every month, return subscriptionDrafts.',
             'Do not also create a normal expense draft for a subscription unless the user clearly says it was paid today.',
+            'For subscription frequency, use weekly for every week/weekly and monthly for every month/monthly. Default to monthly.',
             'For subscription billingDay, infer day of month if mentioned, otherwise use today day.',
             'If unsure, keep confidence lower and add short questions.',
           ].join('\n'),
@@ -386,6 +388,7 @@ export async function POST(request: Request) {
                   name: 'subscription or recurring bill name',
                   amount: 'number or null',
                   billingDay: '1 to 31 or null',
+                  frequency: 'weekly | monthly',
                   nextDueOn: 'YYYY-MM-DD or null',
                   categoryId: 'matching expense category id or null',
                   groupId: 'matching group id or null',
@@ -448,6 +451,7 @@ export async function POST(request: Request) {
       name: draft.name ?? '',
       amount: typeof draft.amount === 'number' ? draft.amount : null,
       billingDay: typeof draft.billingDay === 'number' ? Math.min(Math.max(Math.trunc(draft.billingDay), 1), 31) : new Date(today).getDate(),
+      frequency: draft.frequency === 'weekly' ? 'weekly' : 'monthly',
       nextDueOn: draft.nextDueOn || today,
       categoryId: draft.categoryId ?? inferCategory('expense', draft.name ?? '', categories)?.id ?? null,
       groupId: draft.groupId ?? null,

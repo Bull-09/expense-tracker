@@ -213,6 +213,7 @@ export async function createSubscription(input: {
   name: string;
   amount: number;
   billingDay: number;
+  frequency?: 'weekly' | 'monthly';
   categoryId?: string | null;
   groupId?: string | null;
   nextDueOn?: string | null;
@@ -227,6 +228,7 @@ export async function createSubscription(input: {
   if (!input.amount || input.amount <= 0) throw new Error('Subscription needs a valid amount.');
 
   const billingDay = Math.min(Math.max(Math.trunc(input.billingDay || new Date().getDate()), 1), 31);
+  const frequency = input.frequency === 'weekly' ? 'weekly' : 'monthly';
   let categoryId = input.categoryId ?? null;
 
   if (!categoryId) {
@@ -241,6 +243,7 @@ export async function createSubscription(input: {
     name,
     amount: input.amount,
     billing_day: billingDay,
+    frequency,
     next_due_on: input.nextDueOn || nextDueDateFromBillingDay(billingDay),
     notes: input.notes?.trim() || null,
   });
@@ -257,6 +260,7 @@ export async function updateSubscription(input: {
   name: string;
   amount: number;
   billingDay: number;
+  frequency?: 'weekly' | 'monthly';
   categoryId?: string | null;
   groupId?: string | null;
   nextDueOn: string;
@@ -272,6 +276,7 @@ export async function updateSubscription(input: {
   if (!input.amount || input.amount <= 0) throw new Error('Subscription needs a valid amount.');
 
   const billingDay = Math.min(Math.max(Math.trunc(input.billingDay), 1), 31);
+  const frequency = input.frequency === 'weekly' ? 'weekly' : 'monthly';
   const { error } = await supabase
     .from('subscriptions')
     .update({
@@ -280,6 +285,7 @@ export async function updateSubscription(input: {
       name,
       amount: input.amount,
       billing_day: billingDay,
+      frequency,
       next_due_on: input.nextDueOn,
       active: input.active,
       notes: input.notes?.trim() || null,

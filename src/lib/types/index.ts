@@ -1,5 +1,6 @@
 export type TransactionKind = 'expense' | 'income' | 'investment' | 'transfer';
 export type CategoryKind = 'expense' | 'income';
+export type SubscriptionFrequency = 'weekly' | 'monthly';
 
 export interface Profile {
   id: string;
@@ -47,7 +48,7 @@ export interface Subscription {
   amount: number;
   currency: string;
   billing_day: number;
-  frequency: 'monthly';
+  frequency: SubscriptionFrequency;
   next_due_on: string;
   active: boolean;
   notes: string | null;

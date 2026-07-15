@@ -6,7 +6,10 @@ import { format } from 'date-fns';
 
 export function SubscriptionBurnCard({ subscriptions }: { subscriptions: Subscription[] }) {
   const active = subscriptions.filter((subscription) => subscription.active);
-  const monthlyTotal = active.reduce((sum, subscription) => sum + subscription.amount, 0);
+  const monthlyTotal = active.reduce(
+    (sum, subscription) => sum + (subscription.frequency === 'weekly' ? subscription.amount * 52 / 12 : subscription.amount),
+    0
+  );
   const next = active[0];
 
   return (

@@ -44,6 +44,7 @@ type SubscriptionDraft = {
   name: string;
   amount: number | null;
   billingDay: number;
+  frequency: 'weekly' | 'monthly';
   nextDueOn: string;
   categoryId?: string | null;
   groupId?: string | null;
@@ -461,6 +462,7 @@ export function AiQuickAddModal({
           name: item.name,
           amount: item.amount,
           billingDay: item.billingDay,
+          frequency: item.frequency,
           nextDueOn: item.nextDueOn,
           categoryId: item.categoryId ?? null,
           groupId: item.groupId ?? null,
@@ -542,6 +544,7 @@ export function AiQuickAddModal({
           name: item.name,
           amount: item.amount,
           billingDay: item.billingDay,
+          frequency: item.frequency,
           nextDueOn: item.nextDueOn,
           categoryId: item.categoryId ?? null,
           groupId: item.groupId ?? null,
@@ -882,7 +885,7 @@ export function AiQuickAddModal({
                     </span>
                     <div>
                       <p className="text-sm font-semibold">Subscription draft</p>
-                      <p className="text-xs text-paper/45">Adds monthly expenses when due.</p>
+                      <p className="text-xs text-paper/45">Adds recurring expenses when due.</p>
                     </div>
                   </div>
                   <CalendarClock size={17} className="text-paper/40" />
@@ -919,7 +922,18 @@ export function AiQuickAddModal({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Input label="Name" value={subscriptionDraft.name} onChange={(event) => updateSubscriptionDraft({ name: event.target.value })} />
                   <Input label="Amount" type="number" min="0.01" step="0.01" value={subscriptionDraft.amount ?? ''} onChange={(event) => updateSubscriptionDraft({ amount: parseFloat(event.target.value) || null })} />
-                  <Input label="Billing day" type="number" min="1" max="31" value={subscriptionDraft.billingDay} onChange={(event) => updateSubscriptionDraft({ billingDay: parseInt(event.target.value, 10) || 1 })} />
+                  <Input label={subscriptionDraft.frequency === 'weekly' ? 'Due day hint' : 'Billing day'} type="number" min="1" max="31" value={subscriptionDraft.billingDay} onChange={(event) => updateSubscriptionDraft({ billingDay: parseInt(event.target.value, 10) || 1 })} />
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-paper/70">Repeats</label>
+                    <select
+                      value={subscriptionDraft.frequency}
+                      onChange={(event) => updateSubscriptionDraft({ frequency: event.target.value as SubscriptionDraft['frequency'] })}
+                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                    >
+                      <option value="monthly">Monthly</option>
+                      <option value="weekly">Weekly</option>
+                    </select>
+                  </div>
                   <Input label="Next due" type="date" value={subscriptionDraft.nextDueOn} onChange={(event) => updateSubscriptionDraft({ nextDueOn: event.target.value })} />
 
                   <div className="flex flex-col gap-1.5">

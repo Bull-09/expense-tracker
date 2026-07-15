@@ -10,7 +10,7 @@ create table if not exists public.subscriptions (
   amount numeric(12,2) not null check (amount > 0),
   currency text not null default 'INR',
   billing_day integer not null check (billing_day between 1 and 31),
-  frequency text not null default 'monthly' check (frequency = 'monthly'),
+  frequency text not null default 'monthly' check (frequency in ('weekly', 'monthly')),
   next_due_on date not null,
   active boolean not null default true,
   notes text,

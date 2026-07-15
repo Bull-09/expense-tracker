@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { addMonths, format, isAfter, parseISO } from 'date-fns';
+import { addMonths, addWeeks, format, isAfter, parseISO } from 'date-fns';
 import { inferCategory } from '@/lib/categories/auto';
 import { Profile, Transaction, SplitShare, Category, BalanceSummary, DashboardTotals, Group, Subscription } from '@/lib/types';
 
@@ -70,6 +70,11 @@ function nextMonthlyDue(currentDue: Date, billingDay: number) {
   return dueDateForMonth(addMonths(currentDue, 1), billingDay);
 }
 
+function nextSubscriptionDue(currentDue: Date, billingDay: number, frequency: Subscription['frequency']) {
+  if (frequency === 'weekly') return addWeeks(currentDue, 1);
+  return nextMonthlyDue(currentDue, billingDay);
+}
+
 export async function ensureDueSubscriptionTransactions(today = new Date()) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -107,7 +112,7 @@ export async function ensureDueSubscriptionTransactions(today = new Date()) {
         occurred_on: occurredOn,
         is_split: false,
       });
-      due = nextMonthlyDue(due, subscription.billing_day);
+      due = nextSubscriptionDue(due, subscription.billing_day, subscription.frequency);
     }
 
     if (rows.length > 0) {
@@ -241,5 +246,5 @@ export function computeBalances(splitShares: SplitShare[], userId: string): Bala
 export function computeSubscriptionMonthlyTotal(subscriptions: Subscription[]) {
   return subscriptions
     .filter((subscription) => subscription.active)
-    .reduce((sum, subscription) => sum + subscription.amount, 0);
+    .reduce((sum, subscription) => sum + (subscription.frequency === 'weekly' ? subscription.amount * 52 / 12 : subscription.amount), 0);
 }

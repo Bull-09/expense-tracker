@@ -18,6 +18,7 @@ type FormState = {
   name: string;
   amount: string;
   billingDay: string;
+  frequency: Subscription['frequency'];
   nextDueOn: string;
   categoryId: string;
   groupId: string;
@@ -29,6 +30,7 @@ const emptyForm: FormState = {
   name: '',
   amount: '',
   billingDay: String(new Date().getDate()),
+  frequency: 'monthly',
   nextDueOn: todayIso(),
   categoryId: '',
   groupId: '',
@@ -53,7 +55,9 @@ export function SubscriptionsPanel({
 
   const expenseCategories = categories.filter((category) => category.kind === 'expense');
   const activeMonthlyTotal = useMemo(
-    () => subscriptions.filter((item) => item.active).reduce((sum, item) => sum + item.amount, 0),
+    () => subscriptions
+      .filter((item) => item.active)
+      .reduce((sum, item) => sum + (item.frequency === 'weekly' ? item.amount * 52 / 12 : item.amount), 0),
     [subscriptions]
   );
   const nextThree = subscriptions.filter((item) => item.active).slice(0, 3);
@@ -73,6 +77,7 @@ export function SubscriptionsPanel({
       name: item.name,
       amount: String(item.amount),
       billingDay: String(item.billing_day),
+      frequency: item.frequency,
       nextDueOn: item.next_due_on,
       categoryId: item.category_id ?? '',
       groupId: item.group_id ?? '',
@@ -98,6 +103,7 @@ export function SubscriptionsPanel({
             name: form.name,
             amount,
             billingDay,
+            frequency: form.frequency,
             nextDueOn: form.nextDueOn,
             categoryId: form.categoryId || null,
             groupId: form.groupId || null,
@@ -110,6 +116,7 @@ export function SubscriptionsPanel({
             name: form.name,
             amount,
             billingDay,
+            frequency: form.frequency,
             nextDueOn: form.nextDueOn,
             categoryId: form.categoryId || null,
             groupId: form.groupId || null,
@@ -134,6 +141,7 @@ export function SubscriptionsPanel({
           name: item.name,
           amount: item.amount,
           billingDay: item.billing_day,
+          frequency: item.frequency,
           nextDueOn: item.next_due_on,
           categoryId: item.category_id,
           groupId: item.group_id,
@@ -170,7 +178,7 @@ export function SubscriptionsPanel({
           <div>
             <h2 className="font-semibold">Subscription autopilot</h2>
             <p className="mt-1 text-sm text-paper/45">
-              Monthly items become expenses when they are due. No double entries.
+              Recurring items become expenses when they are due. No double entries.
             </p>
           </div>
           <div className="rounded-lg border border-ink-border bg-ink px-3 py-2 text-right">
@@ -182,7 +190,18 @@ export function SubscriptionsPanel({
         <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
           <Input label="Name" value={form.name} onChange={(event) => patchForm({ name: event.target.value })} placeholder="Netflix, gym, iCloud" required />
           <Input label="Amount" type="number" min="0.01" step="0.01" value={form.amount} onChange={(event) => patchForm({ amount: event.target.value })} required />
-          <Input label="Billing day" type="number" min="1" max="31" value={form.billingDay} onChange={(event) => patchForm({ billingDay: event.target.value })} required />
+          <Input label={form.frequency === 'weekly' ? 'Due day hint' : 'Billing day'} type="number" min="1" max="31" value={form.billingDay} onChange={(event) => patchForm({ billingDay: event.target.value })} required />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-paper/70">Repeats</label>
+            <select
+              value={form.frequency}
+              onChange={(event) => patchForm({ frequency: event.target.value as Subscription['frequency'] })}
+              className="w-full rounded-lg border border-ink-border bg-ink px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+            >
+              <option value="monthly">Monthly</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
           <Input label="Next due" type="date" value={form.nextDueOn} onChange={(event) => patchForm({ nextDueOn: event.target.value })} required />
 
           <div className="flex flex-col gap-1.5">
@@ -247,7 +266,9 @@ export function SubscriptionsPanel({
                   <p className="truncate text-sm font-medium">{item.name}</p>
                   <p className="font-ledger text-sm font-bold text-clay">{formatCurrency(item.amount)}</p>
                 </div>
-                <p className="mt-1 text-xs text-paper/40">Due {format(new Date(item.next_due_on), 'MMM d')} · day {item.billing_day}</p>
+                <p className="mt-1 text-xs text-paper/40">
+                  Due {format(new Date(item.next_due_on), 'MMM d')} · {item.frequency}
+                </p>
               </div>
             ))}
           </div>
@@ -272,7 +293,7 @@ export function SubscriptionsPanel({
                     {item.category && <span className="text-xs text-paper/40">{item.category.name}</span>}
                   </div>
                   <p className="mt-1 text-sm text-paper/45">
-                    {formatCurrency(item.amount)} monthly · next {format(new Date(item.next_due_on), 'MMM d, yyyy')}
+                    {formatCurrency(item.amount)} {item.frequency} · next {format(new Date(item.next_due_on), 'MMM d, yyyy')}
                     {item.group ? ` · ${item.group.emoji} ${item.group.name}` : ''}
                   </p>
                 </div>
