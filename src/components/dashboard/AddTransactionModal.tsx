@@ -203,17 +203,25 @@ export function AddTransactionModal({
               ))}
             </select>
             {!effectiveCategoryId && (
-              <div className="rounded-lg border border-ink-border bg-ink px-3 py-2">
-                <p className="text-xs text-paper/45">
-                  This will save as Uncategorized unless you pick or create a category.
+              <div className="rounded-lg border border-emerald/25 bg-emerald/5 px-3 py-2.5">
+                <p className="text-xs font-medium text-emerald">
+                  Create a new category while saving
+                </p>
+                <p className="mt-1 text-xs text-paper/50">
+                  Leave this blank to save as Uncategorized, or type a category name here.
                 </p>
                 <Input
-                  label="New category (optional)"
+                  label="New category"
                   value={createCategoryName}
                   onChange={(event) => setCreateCategoryName(event.target.value)}
                   placeholder="e.g. Cigarettes, Snacks, Apps"
                   className="mt-2"
                 />
+                {createCategoryName.trim() && (
+                  <p className="mt-2 text-xs text-paper/55">
+                    Will create "{createCategoryName.trim()}" and use it for this {kind}.
+                  </p>
+                )}
                 {suggestedCategory && !createCategoryName && (
                   <button
                     type="button"
