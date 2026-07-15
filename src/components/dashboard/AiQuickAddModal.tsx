@@ -278,7 +278,7 @@ export function AiQuickAddModal({
 
     try {
       const formData = new FormData();
-      formData.append('audio', audio, 'mithu-voice.webm');
+      formData.append('audio', audio, 'c137-voice.webm');
       if (visibleTranscript.trim()) formData.append('message', visibleTranscript.trim());
 
       const response = await fetch('/api/ai/quick-add', {
@@ -581,7 +581,7 @@ export function AiQuickAddModal({
               <Bot size={17} />
             </span>
             <span className="min-w-0">
-              <span className="block text-sm font-semibold">Mithu AI</span>
+              <span className="block text-sm font-semibold">C-137 AI</span>
               <span className="block truncate text-xs text-paper/45">Lazy expense chat. Speak or type.</span>
             </span>
           </span>

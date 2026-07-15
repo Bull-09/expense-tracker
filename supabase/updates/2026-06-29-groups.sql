@@ -1,5 +1,5 @@
 -- Run this once in Supabase SQL Editor if your project already has the
--- original Mithu Chit Fund Tracker schema and you want to add Groups support.
+-- original C-137 Capital schema and you want to add Groups support.
 
 create table if not exists public.groups (
   id uuid primary key default gen_random_uuid(),

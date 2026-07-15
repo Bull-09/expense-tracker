@@ -55,8 +55,8 @@ export function SettingsForm({ profile }: { profile: Profile }) {
 
     if (hasNativeShare) {
       await navigator.share({
-        title: 'Join my Mithu Chit Fund Tracker',
-        text: 'Track shared expenses with me on Mithu Chit Fund Tracker.',
+        title: 'Join my C-137 Capital',
+        text: 'Track shared expenses with me on C-137 Capital.',
         url: appUrl,
       });
       return;
@@ -118,7 +118,7 @@ export function SettingsForm({ profile }: { profile: Profile }) {
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-semibold text-paper/60 uppercase tracking-wide">Install on phone</h2>
             <p className="mt-2 text-sm text-paper/50">
-              Add Mithu Chit Fund Tracker to your home screen for an app-like launch, full-screen view, and quicker daily logging.
+              Add C-137 Capital to your home screen for an app-like launch, full-screen view, and quicker daily logging.
             </p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
               {installPrompt ? (

@@ -238,7 +238,7 @@ export function SubscriptionsPanel({
           <h2 className="font-semibold">Coming up</h2>
         </div>
         {nextThree.length === 0 ? (
-          <p className="text-sm text-paper/45">Add your first recurring cost from here or by chatting with Mithu AI.</p>
+          <p className="text-sm text-paper/45">Add your first recurring cost from here or by chatting with C-137 AI.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {nextThree.map((item) => (
@@ -257,7 +257,7 @@ export function SubscriptionsPanel({
       <section className="lg:col-span-2 rounded-xl border border-ink-border bg-ink-raised">
         {subscriptions.length === 0 ? (
           <div className="p-10 text-center text-sm text-paper/40">
-            No subscriptions yet. Try “add Spotify 119 every month on 5th” in Mithu AI.
+            No subscriptions yet. Try “add Spotify 119 every month on 5th” in C-137 AI.
           </div>
         ) : (
           <div className="divide-y divide-ink-border">

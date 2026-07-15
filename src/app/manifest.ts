@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Mithu Chit Fund Tracker',
-    short_name: 'Mithu',
+    name: 'C-137 Capital',
+    short_name: 'C-137',
     description: 'Track personal money and shared expenses with friends.',
     start_url: '/dashboard',
     scope: '/',

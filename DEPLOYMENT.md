@@ -47,7 +47,7 @@ This folder is not a Git repo yet. From the project root:
 ```bash
 git init
 git add .
-git commit -m "Initial commit: Mithu Chit Fund Tracker"
+git commit -m "Initial commit: C-137 Capital"
 ```
 
 Then create a GitHub repo and push it. With GitHub CLI:
@@ -84,10 +84,10 @@ After Vercel gives you a production URL, go back to Supabase:
 
 1. Authentication -> URL Configuration
 2. Set Site URL to your Vercel production URL, for example:
-   `https://mithuchitfund.vercel.app`
+   `https://c-137-capital.vercel.app`
 3. Add Redirect URLs:
    - `http://localhost:3000/**`
-   - `https://mithuchitfund.vercel.app/**`
+   - `https://c-137-capital.vercel.app/**`
    - Any custom domain you add later, such as `https://expenses.example.com/**`
 4. If you want friends to sign up without waiting for email confirmation, go to
    Authentication -> Providers -> Email, turn off "Confirm email", and save.
@@ -116,7 +116,7 @@ instead.
 
 ## 7. Install On Phone
 
-Mithu Chit Fund Tracker is a PWA, so friends can use it like an app:
+C-137 Capital is a PWA, so friends can use it like an app:
 
 - Android Chrome: open the Vercel URL, then tap Install when prompted or use
   browser menu -> Add to Home screen.

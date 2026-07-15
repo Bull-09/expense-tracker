@@ -1,4 +1,4 @@
-# Mithu Chit Fund Tracker
+# C-137 Capital
 
 A personal and shared expense tracker: track income from multiple streams,
 expenses by category, investments, and split costs with friends — with simple
@@ -59,7 +59,7 @@ picker automatically.
 ```bash
 git init
 git add .
-git commit -m "Initial commit: Mithu Chit Fund Tracker"
+git commit -m "Initial commit: C-137 Capital"
 gh repo create expense-tracker --private --source=. --push
 ```
 
@@ -76,7 +76,7 @@ repository" instructions if you don't have the `gh` CLI installed.)
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 4. Click **Deploy**. After a minute or two you'll get a live URL like
-   `mithuchitfund.vercel.app`. That's the link you send to friends.
+   `c-137-capital.vercel.app`. That's the link you send to friends.
 
 From now on, every time you push to GitHub, Vercel redeploys automatically.
 
@@ -100,7 +100,7 @@ when Render is actually needed, see [`DEPLOYMENT.md`](DEPLOYMENT.md).
   then save it as a transaction.
 - **Money forecast** — estimates monthly and yearly income/spend from your own
   behavior without using AI tokens.
-- **Installable web app** — add Mithu Chit Fund Tracker to a phone home screen from the browser
+- **Installable web app** — add C-137 Capital to a phone home screen from the browser
   for a simple app-like experience.
 - **Balances** — a running tally of who owes you and who you owe, with a
   one-tap "Settle" action once someone pays you back (or vice versa).

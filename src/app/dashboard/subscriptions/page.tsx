@@ -19,7 +19,7 @@ export default async function SubscriptionsPage() {
       <div>
         <h1 className="text-2xl font-bold">Subscriptions</h1>
         <p className="mt-1 text-sm text-paper/50">
-          Track recurring costs and let Mithu add them to your monthly spend.
+          Track recurring costs and let C-137 AI add them to your monthly spend.
         </p>
       </div>
 

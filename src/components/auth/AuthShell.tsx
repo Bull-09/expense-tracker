@@ -7,7 +7,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           <div className="w-7 h-7 rounded-md bg-emerald flex items-center justify-center font-ledger text-sm font-bold">
             ₹
           </div>
-          <span className="font-semibold text-lg">Mithu Chit Fund Tracker</span>
+          <span className="font-semibold text-lg">C-137 Capital</span>
         </div>
 
         <div>
@@ -32,7 +32,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
             <div className="w-7 h-7 rounded-md bg-emerald flex items-center justify-center font-ledger text-sm font-bold">
               ₹
             </div>
-            <span className="font-semibold text-lg">Mithu Chit Fund Tracker</span>
+            <span className="font-semibold text-lg">C-137 Capital</span>
           </div>
           {children}
         </div>

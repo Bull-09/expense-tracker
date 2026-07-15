@@ -1,4 +1,4 @@
--- Allows Mithu AI to track "I borrowed from Rahul" as a split balance where
+-- Allows C-137 AI to track "I borrowed from Rahul" as a split balance where
 -- Rahul is the payer and the signed-in user is the person who owes.
 
 drop policy if exists "Payer can create split shares for their transactions" on public.split_shares;

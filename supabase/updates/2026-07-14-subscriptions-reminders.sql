@@ -1,4 +1,4 @@
--- Subscriptions and split reminders for Mithu Chit Fund Tracker.
+-- Subscriptions and split reminders for C-137 Capital.
 -- Run in Supabase SQL Editor after the app deploys.
 
 create table if not exists public.subscriptions (
