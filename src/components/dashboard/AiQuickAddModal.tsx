@@ -673,20 +673,22 @@ export function AiQuickAddModal({
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid grid-cols-3 gap-2 sm:col-span-2">
-                    {(Object.keys(KIND_LABELS) as MoneyEntryKind[]).map((kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        onClick={() => updateDraft({ kind, categoryId: null })}
-                        className={cn(
-                          'rounded-lg border py-2 text-xs font-medium',
-                          draft.kind === kind ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/60'
-                        )}
-                      >
-                        {KIND_LABELS[kind]}
-                      </button>
-                    ))}
+                  <div className="flex flex-col gap-1.5 sm:col-span-2">
+                    <label className="text-sm font-medium text-paper/70">Entry type</label>
+                    <select
+                      value={draft.kind}
+                      onChange={(event) => updateDraft({
+                        kind: event.target.value as MoneyEntryKind,
+                        categoryId: null,
+                        createCategoryName: null,
+                        split: event.target.value === 'expense' ? draft.split : { enabled: false, mode: 'equal', peopleIds: [] },
+                      })}
+                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                    >
+                      {(Object.keys(KIND_LABELS) as MoneyEntryKind[]).map((kind) => (
+                        <option key={kind} value={kind}>{KIND_LABELS[kind]}</option>
+                      ))}
+                    </select>
                   </div>
                   <Input label="Amount" type="number" min="0.01" step="0.01" value={draft.amount ?? ''} onChange={(event) => updateDraft({ amount: parseFloat(event.target.value) || null })} />
                   <Input label="Date" type="date" value={draft.occurredOn} onChange={(event) => updateDraft({ occurredOn: event.target.value })} />
@@ -749,9 +751,12 @@ export function AiQuickAddModal({
 
                 {draft.kind === 'expense' && splitPeople.length > 0 && (
                   <div className="mt-3 border-t border-ink-border pt-3">
-                    <button type="button" onClick={() => updateSplit({ enabled: !draft.split?.enabled })} className="text-xs font-medium text-emerald">
-                      {draft.split?.enabled ? 'Turn off split' : 'Split this'}
-                    </button>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-paper/70">Split settings</p>
+                      <button type="button" onClick={() => updateSplit({ enabled: !draft.split?.enabled })} className="text-xs font-medium text-emerald">
+                        {draft.split?.enabled ? 'Turn off split' : 'Split this'}
+                      </button>
+                    </div>
                     {draft.split?.enabled && (
                       <div className="mt-2 grid gap-2 sm:grid-cols-2">
                         {splitPeople.map((person) => {
@@ -828,20 +833,16 @@ export function AiQuickAddModal({
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid grid-cols-2 gap-2 sm:col-span-2">
-                    {(['borrowed', 'lent'] as const).map((direction) => (
-                      <button
-                        key={direction}
-                        type="button"
-                        onClick={() => updateFriendDraft({ direction })}
-                        className={cn(
-                          'rounded-lg border py-2 text-xs font-medium',
-                          friendDraft.direction === direction ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/60'
-                        )}
-                      >
-                        {direction === 'borrowed' ? 'I borrowed' : 'I lent'}
-                      </button>
-                    ))}
+                  <div className="flex flex-col gap-1.5 sm:col-span-2">
+                    <label className="text-sm font-medium text-paper/70">Transfer type</label>
+                    <select
+                      value={friendDraft.direction}
+                      onChange={(event) => updateFriendDraft({ direction: event.target.value as FriendLedgerDraft['direction'] })}
+                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                    >
+                      <option value="borrowed">I borrowed from this person</option>
+                      <option value="lent">I lent to this person</option>
+                    </select>
                   </div>
 
                   <Input label="Amount" type="number" min="0.01" step="0.01" value={friendDraft.amount ?? ''} onChange={(event) => updateFriendDraft({ amount: parseFloat(event.target.value) || null })} />
