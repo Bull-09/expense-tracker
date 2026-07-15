@@ -225,6 +225,92 @@ function cleanVoiceTranscript(input: string) {
     .trim();
 }
 
+function dateFromText(transcript: string, today: string) {
+  const explicitDate = transcript.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
+  if (explicitDate) {
+    const day = Number(explicitDate[1]);
+    const month = Number(explicitDate[2]);
+    const yearText = explicitDate[3];
+    const year = yearText ? Number(yearText.length === 2 ? `20${yearText}` : yearText) : Number(today.slice(0, 4));
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+  }
+
+  const dayOnly = transcript.match(/\b(\d{1,2})(?:st|nd|rd|th)\b/i);
+  if (dayOnly) {
+    const day = Number(dayOnly[1]);
+    if (day >= 1 && day <= 31) return `${today.slice(0, 8)}${String(day).padStart(2, '0')}`;
+  }
+
+  if (/\byesterday\b/i.test(transcript)) {
+    const date = new Date(`${today}T00:00:00`);
+    date.setDate(date.getDate() - 1);
+    return format(date, 'yyyy-MM-dd');
+  }
+
+  return today;
+}
+
+function moneyAmountFromText(transcript: string) {
+  const values = [...transcript.matchAll(/\b(?:rupees\s*)?(\d+(?:\.\d+)?)\b/gi)]
+    .map((match) => Number(match[1]))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (values.length === 0) return null;
+  return Math.max(...values);
+}
+
+function cleanPersonName(value: string) {
+  return value
+    .replace(/\b(rupees|rs|inr|on|today|yesterday|tomorrow|me|my|money|for|the|a|an)\b/gi, ' ')
+    .replace(/\b\d+(?:\.\d+)?\b/g, ' ')
+    .replace(/\b\d{1,2}(?:st|nd|rd|th)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function friendLedgerFallbackDraft(rawTranscript: string, normalizedTranscript: string, today: string): ParsedFriendLedgerDraft | null {
+  const lower = normalizedTranscript.toLowerCase();
+  const amount = moneyAmountFromText(normalizedTranscript);
+  if (!amount) return null;
+
+  let direction: ParsedFriendLedgerDraft['direction'] | null = null;
+  let name = '';
+
+  const lentBeforeAmount = rawTranscript.match(/\b(?:gave|lent|paid)\s+(?:money\s+)?(?:to\s+)?([a-z][a-z\s]{1,40}?)(?:\s+(?:₹|rs\.?|inr|rupees)?\s*\d|\s+on\b|\s+for\b|$)/i);
+  const lentAfterAmount = rawTranscript.match(/\b(?:gave|lent|paid)\s+(?:₹|rs\.?|inr|rupees)?\s*\d+(?:\.\d+)?\s+(?:to\s+)?([a-z][a-z\s]{1,40}?)(?:\s+on\b|\s+for\b|$)/i);
+  if (/\b(gave|lent|paid)\b/.test(lower) && (lentBeforeAmount || lentAfterAmount)) {
+    direction = 'lent';
+    name = cleanPersonName((lentBeforeAmount ?? lentAfterAmount)?.[1] ?? '');
+  }
+
+  const borrowedFrom = rawTranscript.match(/\b(?:borrowed|took|got|received)\s+(?:money\s+)?(?:(?:₹|rs\.?|inr|rupees)?\s*\d+(?:\.\d+)?\s+)?from\s+([a-z][a-z\s]{1,40}?)(?:\s+on\b|\s+for\b|$)/i);
+  if (!direction && /\b(borrowed|took|got|received)\b/.test(lower) && borrowedFrom) {
+    direction = 'borrowed';
+    name = cleanPersonName(borrowedFrom[1]);
+  }
+
+  const personGaveMe = rawTranscript.match(/\b([a-z][a-z\s]{1,40}?)\s+(?:gave|lent|paid)\s+me\s+(?:₹|rs\.?|inr|rupees)?\s*\d/i);
+  if (!direction && personGaveMe) {
+    direction = 'borrowed';
+    name = cleanPersonName(personGaveMe[1]);
+  }
+
+  if (!direction || !name) return null;
+
+  return {
+    direction,
+    amount,
+    personId: null,
+    personName: name,
+    description: direction === 'lent' ? `Lent ${formatCurrency(amount)} to ${name}` : `Borrowed ${formatCurrency(amount)} from ${name}`,
+    occurredOn: dateFromText(rawTranscript, today),
+    confidence: 0.92,
+    questions: [],
+  };
+}
+
 function cheapReply(transcript: string) {
   const text = transcript.trim().toLowerCase();
   if (/^(hi|hello|hey|yo|namaste|sup)\b/.test(text)) {
@@ -379,6 +465,21 @@ export async function POST(request: Request) {
     if (!transcript) return jsonError('Say or type what happened first.');
     const correctedTranscript = audio ? cleanVoiceTranscript(transcript) : transcript;
     const normalizedTranscript = normalizeTranscript(correctedTranscript);
+    const today = format(new Date(), 'yyyy-MM-dd');
+
+    const deterministicFriendDraft = friendLedgerFallbackDraft(correctedTranscript, normalizedTranscript, today);
+    if (deterministicFriendDraft) {
+      return Response.json({
+        transcript,
+        correctedTranscript,
+        normalizedTranscript,
+        reply: 'I made 1 friend balance. Review it, then save.',
+        drafts: [],
+        subscriptionDrafts: [],
+        friendLedgerDrafts: [deterministicFriendDraft],
+        usage: null,
+      });
+    }
 
     const noTokenReply = cheapReply(normalizedTranscript);
     if (noTokenReply) {
@@ -431,7 +532,6 @@ export async function POST(request: Request) {
       return partial?.id ?? null;
     };
 
-    const today = format(new Date(), 'yyyy-MM-dd');
     const context = {
       today,
       currentUser: {
