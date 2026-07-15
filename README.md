@@ -60,7 +60,7 @@ picker automatically.
 git init
 git add .
 git commit -m "Initial commit: C-137 Capital"
-gh repo create expense-tracker --private --source=. --push
+gh repo create c-137-capital --private --source=. --push
 ```
 
 (Or create a new repo on github.com and follow its "push an existing

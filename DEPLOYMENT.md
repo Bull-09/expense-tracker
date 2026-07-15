@@ -53,7 +53,7 @@ git commit -m "Initial commit: C-137 Capital"
 Then create a GitHub repo and push it. With GitHub CLI:
 
 ```bash
-gh repo create expense-tracker --private --source=. --push
+gh repo create c-137-capital --private --source=. --push
 ```
 
 ## 4. Deploy To Vercel
