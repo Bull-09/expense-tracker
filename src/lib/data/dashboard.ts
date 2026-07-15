@@ -3,6 +3,18 @@ import { addMonths, format, isAfter, parseISO } from 'date-fns';
 import { inferCategory } from '@/lib/categories/auto';
 import { Profile, Transaction, SplitShare, Category, BalanceSummary, DashboardTotals, Group, Subscription } from '@/lib/types';
 
+function isMissingSchemaError(error: { code?: string; message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return (
+    error?.code === '42P01'
+    || error?.code === '42703'
+    || error?.code === 'PGRST200'
+    || message.includes('could not find')
+    || message.includes('does not exist')
+    || message.includes('schema cache')
+  );
+}
+
 export async function getCurrentProfile(): Promise<Profile | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -20,21 +32,32 @@ export async function getCategories(): Promise<Category[]> {
 
 export async function getTransactions(limit = 200): Promise<Transaction[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('transactions')
     .select('*, category:categories(*), subscription:subscriptions(*)')
     .order('occurred_on', { ascending: false })
     .limit(limit);
+
+  if (error && isMissingSchemaError(error)) {
+    const { data: fallbackData } = await supabase
+      .from('transactions')
+      .select('*, category:categories(*)')
+      .order('occurred_on', { ascending: false })
+      .limit(limit);
+    return (fallbackData ?? []) as Transaction[];
+  }
+
   return (data ?? []) as Transaction[];
 }
 
 export async function getSubscriptions(): Promise<Subscription[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('subscriptions')
     .select('*, category:categories(*), group:groups(*)')
     .order('active', { ascending: false })
     .order('next_due_on', { ascending: true });
+  if (error && isMissingSchemaError(error)) return [];
   return (data ?? []) as Subscription[];
 }
 
@@ -52,13 +75,15 @@ export async function ensureDueSubscriptionTransactions(today = new Date()) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
-  const { data: subscriptions } = await supabase
+  const { data: subscriptions, error: subscriptionsError } = await supabase
     .from('subscriptions')
     .select('*')
     .eq('user_id', user.id)
     .eq('active', true)
     .lte('next_due_on', format(today, 'yyyy-MM-dd'));
 
+  if (subscriptionsError && isMissingSchemaError(subscriptionsError)) return;
+  if (subscriptionsError) throw new Error(subscriptionsError.message);
   if (!subscriptions?.length) return;
 
   const { data: categories } = await supabase.from('categories').select('*').eq('user_id', user.id);
@@ -93,6 +118,7 @@ export async function ensureDueSubscriptionTransactions(today = new Date()) {
         .eq('user_id', user.id)
         .eq('subscription_id', subscription.id)
         .in('occurred_on', dueDates);
+      if (existingError && isMissingSchemaError(existingError)) return;
       if (existingError) throw new Error(existingError.message);
 
       const existingDates = new Set((existing ?? []).map((row) => row.occurred_on));

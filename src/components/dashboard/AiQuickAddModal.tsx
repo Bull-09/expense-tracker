@@ -113,8 +113,12 @@ export function AiQuickAddModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [listening, setListening] = useState(false);
+  const [voiceMode, setVoiceMode] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const liveVoiceTextRef = useRef('');
 
   const draft = drafts[selectedDraft];
   const subscriptionDraft = subscriptionDrafts[selectedSubscriptionDraft];
@@ -207,46 +211,127 @@ export function AiQuickAddModal({
     }
   }
 
+  async function sendVoiceNote(audio: Blob, visibleTranscript: string) {
+    if (loading || audio.size === 0) return;
+
+    setOpen(true);
+    setError(null);
+    setLoading(true);
+    setVoiceMode('transcribing');
+
+    const shownText = visibleTranscript.trim() || 'Voice note';
+    appendMessage('user', shownText);
+
+    try {
+      const formData = new FormData();
+      formData.append('audio', audio, 'mithu-voice.webm');
+      if (visibleTranscript.trim()) formData.append('message', visibleTranscript.trim());
+
+      const response = await fetch('/api/ai/quick-add', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await readJsonResponse(response);
+      if (!response.ok) throw new Error(data.error ?? 'Could not understand that voice note.');
+
+      if (data.transcript && data.transcript !== shownText) {
+        appendMessage('user', `Heard: ${data.transcript}`);
+      }
+      appendMessage('assistant', data.reply ?? 'Done.');
+      setDrafts(data.drafts ?? []);
+      setSubscriptionDrafts(data.subscriptionDrafts ?? []);
+      setSelectedDraft(0);
+      setSelectedSubscriptionDraft(0);
+    } catch (err) {
+      const text = err instanceof Error ? err.message : 'Could not understand that voice note.';
+      setError(text);
+      appendMessage('assistant', text);
+    } finally {
+      setLoading(false);
+      setVoiceMode('idle');
+    }
+  }
+
   function toggleListening() {
     if (listening) {
       recognitionRef.current?.stop();
+      recorderRef.current?.stop();
       setListening(false);
       return;
     }
 
     const Recognition = getSpeechRecognition();
-    if (!Recognition) {
-      setError('Live voice typing is not supported here. Use phone keyboard dictation or type it.');
+    setOpen(true);
+    setError(null);
+    setVoiceMode('recording');
+    liveVoiceTextRef.current = message.trim();
+
+    if (Recognition) {
+      const recognition = new Recognition();
+      recognitionRef.current = recognition;
+      recognition.lang = 'en-IN';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      let finalText = message.trim();
+
+      recognition.onresult = (event) => {
+        let interim = '';
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const chunk = event.results[index][0].transcript;
+          if (event.results[index].isFinal) {
+            finalText = `${finalText} ${chunk}`.trim();
+          } else {
+            interim += chunk;
+          }
+        }
+        const visibleText = `${finalText} ${interim}`.trim();
+        liveVoiceTextRef.current = visibleText;
+        setMessage(visibleText);
+      };
+      recognition.onend = () => {
+        recognitionRef.current = null;
+      };
+      recognition.onerror = () => {
+        recognitionRef.current = null;
+      };
+      recognition.start();
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      if (!Recognition) {
+        setVoiceMode('idle');
+        setError('Voice recording is not supported here. Use phone keyboard dictation or type it.');
+        return;
+      }
+      setListening(true);
       return;
     }
 
-    const recognition = new Recognition();
-    recognitionRef.current = recognition;
-    recognition.lang = 'en-IN';
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    let finalText = message.trim();
-
-    recognition.onresult = (event) => {
-      let interim = '';
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        const chunk = event.results[index][0].transcript;
-        if (event.results[index].isFinal) {
-          finalText = `${finalText} ${chunk}`.trim();
-        } else {
-          interim += chunk;
-        }
-      }
-      setMessage(`${finalText} ${interim}`.trim());
-    };
-    recognition.onend = () => setListening(false);
-    recognition.onerror = () => {
-      setListening(false);
-      setError('Voice typing stopped. Try again or type it.');
-    };
-    recognition.start();
-    setOpen(true);
-    setListening(true);
+    void navigator.mediaDevices.getUserMedia({ audio: true })
+      .then((stream) => {
+        audioChunksRef.current = [];
+        const recorder = new MediaRecorder(stream);
+        recorderRef.current = recorder;
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) audioChunksRef.current.push(event.data);
+        };
+        recorder.onstop = () => {
+          stream.getTracks().forEach((track) => track.stop());
+          const audio = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+          const visibleTranscript = liveVoiceTextRef.current;
+          setListening(false);
+          setMessage('');
+          void sendVoiceNote(audio, visibleTranscript);
+        };
+        recorder.start();
+        setListening(true);
+      })
+      .catch(() => {
+        setVoiceMode('idle');
+        setListening(false);
+        recognitionRef.current?.stop();
+        setError('Microphone permission was blocked. Allow mic access or type it.');
+      });
   }
 
   function togglePerson(id: string) {
@@ -653,11 +738,12 @@ export function AiQuickAddModal({
             onClick={toggleListening}
             className={cn(
               'flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border transition-colors',
-              listening ? 'border-clay bg-clay text-paper' : 'border-ink-border bg-ink text-paper/70 hover:text-paper'
+              listening ? 'border-clay bg-clay text-paper' : voiceMode === 'transcribing' ? 'border-gold bg-gold/15 text-gold' : 'border-ink-border bg-ink text-paper/70 hover:text-paper'
             )}
-            aria-label={listening ? 'Stop voice typing' : 'Start voice typing'}
+            aria-label={listening ? 'Stop voice note' : 'Start voice note'}
+            disabled={voiceMode === 'transcribing'}
           >
-            {listening ? <Square size={17} /> : <Mic size={18} />}
+            {voiceMode === 'transcribing' ? <Loader2 size={18} className="animate-spin" /> : listening ? <Square size={17} /> : <Mic size={18} />}
           </button>
           <button
             type="submit"

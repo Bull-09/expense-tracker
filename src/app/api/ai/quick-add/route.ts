@@ -8,6 +8,7 @@ import {
   getSplitShares,
 } from '@/lib/data/dashboard';
 import { inferCategory } from '@/lib/categories/auto';
+import { format } from 'date-fns';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,6 +51,30 @@ function extractJson(content: string) {
   const trimmed = content.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   return JSON.parse(fenced?.[1] ?? trimmed);
+}
+
+function normalizeTranscript(input: string) {
+  return input
+    .replace(/[₹]/g, ' rupees ')
+    .replace(/\b(rs|inr)\.?\s*/gi, ' rupees ')
+    .replace(/\b(\d+(?:\.\d+)?)\s*k\b/gi, (_, value) => `${Number(value) * 1000}`)
+    .replace(/\bsubcription\b/gi, 'subscription')
+    .replace(/\bsubscribtion\b/gi, 'subscription')
+    .replace(/\bmontly\b/gi, 'monthly')
+    .replace(/\brecurringg?\b/gi, 'recurring')
+    .replace(/\bexpence\b/gi, 'expense')
+    .replace(/\bpayed\b/gi, 'paid')
+    .replace(/\boweing\b/gi, 'owing')
+    .replace(/\bchaii\b/gi, 'chai')
+    .replace(/\buber\b/gi, 'Uber')
+    .replace(/\bnet flix\b/gi, 'Netflix')
+    .replace(/\bspotyfy\b/gi, 'Spotify')
+    .replace(/\bsplit between\b/gi, 'split with')
+    .replace(/\bdivide with\b/gi, 'split with')
+    .replace(/\band then\b/gi, ' and ')
+    .replace(/\balso\b/gi, ' and ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function cheapReply(transcript: string) {
@@ -160,15 +185,17 @@ export async function POST(request: Request) {
 
     transcript = transcript.trim();
     if (!transcript) return jsonError('Say or type what happened first.');
+    const normalizedTranscript = normalizeTranscript(transcript);
 
-    const noTokenReply = cheapReply(transcript);
+    const noTokenReply = cheapReply(normalizedTranscript);
     if (noTokenReply) {
-      return Response.json({ transcript, reply: noTokenReply, drafts: [], subscriptionDrafts: [] });
+      return Response.json({ transcript, normalizedTranscript, reply: noTokenReply, drafts: [], subscriptionDrafts: [] });
     }
 
-    if (isOutstandingQuestion(transcript)) {
+    if (isOutstandingQuestion(normalizedTranscript)) {
       return Response.json({
         transcript,
+        normalizedTranscript,
         reply: await outstandingReply(profile.id),
         drafts: [],
         subscriptionDrafts: [],
@@ -185,7 +212,7 @@ export async function POST(request: Request) {
       getGroups(),
     ]);
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = format(new Date(), 'yyyy-MM-dd');
     const context = {
       today,
       currentUser: {
@@ -216,12 +243,15 @@ export async function POST(request: Request) {
     const completion = await openai.chat.completions.create({
       model: process.env.OPENAI_PARSE_MODEL ?? 'gpt-4o-mini',
       temperature: 0.1,
+      max_tokens: 900,
       response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
           content: [
             'You convert casual Indian English or Hinglish money notes into transaction drafts for an expense tracker.',
+            'Correct obvious speech-to-text mistakes silently before drafting.',
+            'Prefer the normalized transcript, but use the raw transcript if it preserves names or meaning better.',
             'Return only valid JSON. Never save automatically.',
             'Act like a concise friendly chat assistant. Reply normally if the user is chatting, greeting, or asking non-entry questions.',
             'Do not force a transaction draft if there is no clear money event.',
@@ -244,7 +274,8 @@ export async function POST(request: Request) {
           role: 'user',
           content: JSON.stringify({
             context,
-            transcript,
+            rawTranscript: transcript,
+            transcript: normalizedTranscript,
             outputShape: {
               reply: 'short friendly assistant reply',
               drafts: [
@@ -315,6 +346,7 @@ export async function POST(request: Request) {
 
     return Response.json({
       transcript,
+      normalizedTranscript,
       reply: parsed.reply ?? (drafts.length > 0 || subscriptionDrafts.length > 0 ? 'I made a draft. Review it before saving.' : 'Got it.'),
       drafts,
       subscriptionDrafts,
