@@ -23,6 +23,16 @@ function isTransactionKindConstraintError(error: { message?: string; code?: stri
   return message.includes('transactions_kind_check') || message.includes('violates check constraint');
 }
 
+function isValidTransactionKind(kind: unknown): kind is TransactionKind {
+  return kind === 'expense' || kind === 'income' || kind === 'investment' || kind === 'transfer';
+}
+
+function assertValidTransactionKind(kind: unknown): asserts kind is TransactionKind {
+  if (!isValidTransactionKind(kind)) {
+    throw new Error('This draft has an invalid entry type. Delete it and ask C-137 AI to make the draft again.');
+  }
+}
+
 function isMissingSchemaError(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? '';
   return (
@@ -87,6 +97,7 @@ export async function createTransaction(input: {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+  assertValidTransactionKind(input.kind);
 
   const isSplit = !!(input.splits && input.splits.length > 0);
   let categoryId = input.categoryId;
@@ -359,6 +370,7 @@ export async function updateTransaction(input: {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+  assertValidTransactionKind(input.kind);
 
   let categoryId = input.kind === 'transfer' ? null : input.categoryId;
   if (!categoryId && input.kind !== 'transfer') {

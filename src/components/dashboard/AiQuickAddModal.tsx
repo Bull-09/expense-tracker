@@ -91,6 +91,19 @@ const KIND_LABELS: Record<MoneyEntryKind, string> = {
   investment: 'Investment',
 };
 
+function normalizeMoneyEntryKind(kind: unknown): MoneyEntryKind {
+  if (kind === 'income' || kind === 'investment') return kind;
+  return 'expense';
+}
+
+function normalizeIncomingDraft(item: Draft): Draft {
+  return {
+    ...item,
+    kind: normalizeMoneyEntryKind(item.kind),
+    createCategoryName: item.categoryId ? null : item.suggestedCategoryName ?? null,
+  };
+}
+
 function getSpeechRecognition() {
   if (typeof window === 'undefined') return null;
   const win = window as Window & {
@@ -256,10 +269,7 @@ export function AiQuickAddModal({
       if (!response.ok) throw new Error(data.error ?? 'Could not understand that.');
 
       appendMessage('assistant', data.reply ?? 'Done.');
-      setDrafts((data.drafts ?? []).map((item: Draft) => ({
-        ...item,
-        createCategoryName: item.categoryId ? null : item.suggestedCategoryName ?? null,
-      })));
+      setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
       setSubscriptionDrafts(data.subscriptionDrafts ?? []);
       setFriendLedgerDrafts(data.friendLedgerDrafts ?? []);
       setSelectedDraft(0);
@@ -302,10 +312,7 @@ export function AiQuickAddModal({
         updateMessage(voiceMessageId, cleanedTranscript.trim());
       }
       appendMessage('assistant', data.reply ?? 'Done.');
-      setDrafts((data.drafts ?? []).map((item: Draft) => ({
-        ...item,
-        createCategoryName: item.categoryId ? null : item.suggestedCategoryName ?? null,
-      })));
+      setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
       setSubscriptionDrafts(data.subscriptionDrafts ?? []);
       setFriendLedgerDrafts(data.friendLedgerDrafts ?? []);
       setSelectedDraft(0);
@@ -419,18 +426,19 @@ export function AiQuickAddModal({
         if (!item.amount || item.amount <= 0) {
           throw new Error('Every draft needs a valid amount before saving.');
         }
+        const kind = normalizeMoneyEntryKind(item.kind);
 
         const split = item.split;
         const equalShare = split?.peopleIds?.length ? item.amount / (split.peopleIds.length + 1) : 0;
 
         await createTransaction({
-          kind: item.kind,
+          kind,
           groupId: item.groupId ?? null,
           categoryId: item.categoryId ?? null,
           createCategoryName: item.categoryId ? null : item.createCategoryName ?? null,
           amount: item.amount,
           description: item.description,
-          source: item.kind === 'income' ? item.source ?? undefined : undefined,
+          source: kind === 'income' ? item.source ?? undefined : undefined,
           occurredOn: item.occurredOn,
           splits: split?.enabled
             ? split.peopleIds.map((personId) => ({
@@ -516,16 +524,17 @@ export function AiQuickAddModal({
         if (!item.amount || item.amount <= 0) {
           throw new Error('Every entry needs a valid amount before saving.');
         }
+        const kind = normalizeMoneyEntryKind(item.kind);
         const split = item.split;
         const equalShare = split?.peopleIds?.length ? item.amount / (split.peopleIds.length + 1) : 0;
         await createTransaction({
-          kind: item.kind,
+          kind,
           groupId: item.groupId ?? null,
           categoryId: item.categoryId ?? null,
           createCategoryName: item.categoryId ? null : item.createCategoryName ?? null,
           amount: item.amount,
           description: item.description,
-          source: item.kind === 'income' ? item.source ?? undefined : undefined,
+          source: kind === 'income' ? item.source ?? undefined : undefined,
           occurredOn: item.occurredOn,
           splits: split?.enabled
             ? split.peopleIds.map((personId) => ({

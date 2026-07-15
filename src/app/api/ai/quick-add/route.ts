@@ -32,6 +32,11 @@ type ParsedDraft = {
   questions?: string[];
 };
 
+function normalizeDraftKind(kind: unknown): ParsedDraft['kind'] {
+  if (kind === 'income' || kind === 'investment') return kind;
+  return 'expense';
+}
+
 type ParsedFriendLedgerDraft = {
   direction: 'borrowed' | 'lent';
   amount: number | null;
@@ -425,12 +430,12 @@ export async function POST(request: Request) {
       friendLedgerDrafts?: ParsedFriendLedgerDraft[];
     };
     const drafts = (parsed.drafts ?? []).map((draft) => ({
-      kind: draft.kind,
+      kind: normalizeDraftKind(draft.kind),
       amount: typeof draft.amount === 'number' ? draft.amount : null,
       description: draft.description ?? '',
       source: draft.source ?? null,
       occurredOn: draft.occurredOn || today,
-      categoryId: draft.categoryId ?? inferCategory(draft.kind, `${draft.description ?? ''} ${draft.source ?? ''}`, categories)?.id ?? null,
+      categoryId: draft.categoryId ?? inferCategory(normalizeDraftKind(draft.kind), `${draft.description ?? ''} ${draft.source ?? ''}`, categories)?.id ?? null,
       suggestedCategoryName: draft.suggestedCategoryName ?? null,
       groupId: draft.groupId ?? null,
       split: draft.split ?? { enabled: false, mode: 'equal', peopleIds: [] },
