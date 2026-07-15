@@ -23,6 +23,24 @@ function isTransactionKindConstraintError(error: { message?: string; code?: stri
   return message.includes('transactions_kind_check') || message.includes('violates check constraint');
 }
 
+function isMissingSchemaError(error: { code?: string; message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return (
+    error?.code === '42P01'
+    || error?.code === '42703'
+    || error?.code === 'PGRST200'
+    || message.includes('could not find')
+    || message.includes('does not exist')
+    || message.includes('schema cache')
+  );
+}
+
+function withoutGroupId<T extends { group_id?: string | null }>(row: T) {
+  const next = { ...row };
+  delete next.group_id;
+  return next;
+}
+
 export async function createCategory(input: {
   name: string;
   kind: 'expense' | 'income';
@@ -89,21 +107,33 @@ export async function createTransaction(input: {
     categoryId = inferred?.id ?? null;
   }
 
-  const { data: transaction, error } = await supabase
+  const transactionRow = {
+    user_id: user.id,
+    ...(input.groupId ? { group_id: input.groupId } : {}),
+    kind: input.kind,
+    category_id: categoryId,
+    amount: input.amount,
+    description: input.description,
+    source: input.kind === 'income' || input.kind === 'transfer' ? input.source ?? null : null,
+    occurred_on: input.occurredOn,
+    is_split: isSplit,
+  };
+
+  let { data: transaction, error } = await supabase
     .from('transactions')
-    .insert({
-      user_id: user.id,
-      ...(input.groupId ? { group_id: input.groupId } : {}),
-      kind: input.kind,
-      category_id: categoryId,
-      amount: input.amount,
-      description: input.description,
-      source: input.kind === 'income' || input.kind === 'transfer' ? input.source ?? null : null,
-      occurred_on: input.occurredOn,
-      is_split: isSplit,
-    })
+    .insert(transactionRow)
     .select()
     .single();
+
+  if (error && input.groupId && isMissingSchemaError(error)) {
+    const fallback = await supabase
+      .from('transactions')
+      .insert(withoutGroupId(transactionRow))
+      .select()
+      .single();
+    transaction = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     if (input.kind === 'transfer' && isTransactionKindConstraintError(error)) {
@@ -111,6 +141,8 @@ export async function createTransaction(input: {
     }
     throw new Error(error.message);
   }
+
+  if (!transaction) throw new Error('Could not create transaction.');
 
   if (isSplit && input.splits) {
     const rows = input.splits
@@ -337,20 +369,31 @@ export async function updateTransaction(input: {
 
   const isSplit = (input.kind === 'expense' || input.kind === 'transfer') && !!(input.splits && input.splits.length > 0);
 
-  const { error } = await supabase
+  const transactionPatch = {
+    group_id: input.groupId ?? null,
+    kind: input.kind,
+    category_id: categoryId,
+    amount: input.amount,
+    description: input.description,
+    source: input.kind === 'income' || input.kind === 'transfer' ? input.source ?? null : null,
+    occurred_on: input.occurredOn,
+    is_split: isSplit,
+  };
+
+  let { error } = await supabase
     .from('transactions')
-    .update({
-      group_id: input.groupId ?? null,
-      kind: input.kind,
-      category_id: categoryId,
-      amount: input.amount,
-      description: input.description,
-      source: input.kind === 'income' || input.kind === 'transfer' ? input.source ?? null : null,
-      occurred_on: input.occurredOn,
-      is_split: isSplit,
-    })
+    .update(transactionPatch)
     .eq('id', input.id)
     .eq('user_id', user.id);
+
+  if (error && isMissingSchemaError(error)) {
+    const fallback = await supabase
+      .from('transactions')
+      .update(withoutGroupId(transactionPatch))
+      .eq('id', input.id)
+      .eq('user_id', user.id);
+    error = fallback.error;
+  }
 
   if (error) {
     if (input.kind === 'transfer' && isTransactionKindConstraintError(error)) {
