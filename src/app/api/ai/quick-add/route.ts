@@ -291,6 +291,8 @@ export async function POST(request: Request) {
         model: process.env.OPENAI_TRANSCRIBE_MODEL ?? 'gpt-4o-mini-transcribe',
         prompt: [
           'Indian English and Hinglish expense tracker voice note.',
+          'Correct obvious speech recognition mistakes into clean readable money notes.',
+          'Examples: cigger/cigg/sutta means cigarette or smoke, montly means monthly, udhar/udhaar means borrowed/lent money.',
           'Common words: rupees, chai, sutta, smoke, cigarette, petrol, cab, Uber, Ola, Swiggy, Zomato, Blinkit.',
           'Money actions: spent, paid, got, received, borrowed, lent, udhaar, split, subscription, monthly.',
           'Preserve names of friends, vendors, apps, and amounts.',

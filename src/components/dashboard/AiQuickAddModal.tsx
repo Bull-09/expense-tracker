@@ -164,6 +164,7 @@ export function AiQuickAddModal({
     person.id !== currentUserId && (!selectedGroup || allowedMemberIds.includes(person.id))
   );
   const expenseCategories = categories.filter((category) => category.kind === 'expense');
+  const voicePreview = message.trim();
 
   function appendMessage(role: ChatMessage['role'], text: string) {
     const id = `${role}-${Date.now()}-${Math.random()}`;
@@ -1003,36 +1004,72 @@ export function AiQuickAddModal({
             event.preventDefault();
             void sendMessage(message);
           }}
-          className="flex items-end gap-2 p-3"
+          className="flex flex-col gap-2 p-3"
         >
-          <textarea
-            value={message}
-            onFocus={() => setOpen(true)}
-            onChange={(event) => setMessage(event.target.value)}
-            placeholder="Ask or add: spent 250 on chai..."
-            rows={1}
-            className="max-h-28 min-h-11 flex-1 resize-none rounded-xl border border-ink-border bg-ink px-3 py-2.5 text-sm text-paper placeholder:text-paper/30 focus:border-emerald/60 focus:outline-none focus:ring-2 focus:ring-emerald/60"
-          />
-          <button
-            type="button"
-            onClick={toggleListening}
-            className={cn(
-              'flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border transition-colors',
-              listening ? 'border-clay bg-clay text-paper' : voiceMode === 'transcribing' ? 'border-gold bg-gold/15 text-gold' : 'border-ink-border bg-ink text-paper/70 hover:text-paper'
-            )}
-            aria-label={listening ? 'Stop voice note' : 'Start voice note'}
-            disabled={voiceMode === 'transcribing'}
-          >
-            {voiceMode === 'transcribing' ? <Loader2 size={18} className="animate-spin" /> : listening ? <Square size={17} /> : <Mic size={18} />}
-          </button>
-          <button
-            type="submit"
-            disabled={loading || !message.trim()}
-            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald text-paper transition-colors hover:bg-emerald/90 disabled:opacity-40"
-            aria-label="Send message"
-          >
-            {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-          </button>
+          {voiceMode !== 'idle' && (
+            <div className="rounded-xl border border-emerald/20 bg-emerald/10 px-3 py-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-emerald">
+                  {voiceMode === 'transcribing' ? (
+                    <Loader2 size={17} className="animate-spin" />
+                  ) : (
+                    <div className="flex h-5 items-end gap-0.5" aria-hidden="true">
+                      <span className="h-2 w-1 rounded-full bg-emerald animate-pulse" />
+                      <span className="h-4 w-1 rounded-full bg-emerald animate-pulse [animation-delay:120ms]" />
+                      <span className="h-3 w-1 rounded-full bg-emerald animate-pulse [animation-delay:240ms]" />
+                      <span className="h-5 w-1 rounded-full bg-emerald animate-pulse [animation-delay:360ms]" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald">
+                    {voiceMode === 'transcribing' ? 'Correcting voice note' : 'Listening live'}
+                  </p>
+                  <p className="mt-0.5 truncate text-sm text-paper/75">
+                    {voiceMode === 'transcribing'
+                      ? 'Cleaning the words and making smart drafts...'
+                      : voicePreview || 'Speak naturally. I will clean it after you stop.'}
+                  </p>
+                </div>
+              </div>
+              {voiceMode === 'recording' && voicePreview && (
+                <p className="mt-2 rounded-lg bg-ink/70 px-3 py-2 text-sm leading-relaxed text-paper/85">
+                  {voicePreview}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-end gap-2">
+            <textarea
+              value={message}
+              onFocus={() => setOpen(true)}
+              onChange={(event) => setMessage(event.target.value)}
+              placeholder={voiceMode === 'recording' ? 'Listening...' : 'Ask or add: spent 250 on chai...'}
+              rows={1}
+              className="max-h-28 min-h-11 flex-1 resize-none rounded-xl border border-ink-border bg-ink px-3 py-2.5 text-sm text-paper placeholder:text-paper/30 focus:border-emerald/60 focus:outline-none focus:ring-2 focus:ring-emerald/60"
+            />
+            <button
+              type="button"
+              onClick={toggleListening}
+              className={cn(
+                'flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border transition-colors',
+                listening ? 'border-clay bg-clay text-paper' : voiceMode === 'transcribing' ? 'border-gold bg-gold/15 text-gold' : 'border-ink-border bg-ink text-paper/70 hover:text-paper'
+              )}
+              aria-label={listening ? 'Stop voice note' : 'Start voice note'}
+              disabled={voiceMode === 'transcribing'}
+            >
+              {voiceMode === 'transcribing' ? <Loader2 size={18} className="animate-spin" /> : listening ? <Square size={17} /> : <Mic size={18} />}
+            </button>
+            <button
+              type="submit"
+              disabled={loading || listening || !message.trim()}
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald text-paper transition-colors hover:bg-emerald/90 disabled:opacity-40"
+              aria-label="Send message"
+            >
+              {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+            </button>
+          </div>
         </form>
       </div>
     </div>
