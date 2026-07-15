@@ -218,18 +218,20 @@ export function AiQuickAddModal({
   const voicePreview = message.trim();
 
   function resolveFriendDraft(item: FriendLedgerDraft): FriendLedgerDraft {
-    if (item.personId && directory.some((person) => person.id === item.personId)) return item;
+    const friendDirectory = directory.filter((person) => person.id !== currentUserId);
+    if (item.personId && friendDirectory.some((person) => person.id === item.personId)) return item;
     const lookup = normalizePersonLookup(item.personName ?? item.description ?? '');
     if (!lookup) return item;
 
-    const exact = directory.find((person) => normalizePersonLookup(person.full_name) === lookup);
+    const exact = friendDirectory.find((person) => normalizePersonLookup(person.full_name) === lookup);
     const lookupParts = lookup.split(' ').filter(Boolean);
-    const partial = exact ?? directory.find((person) => {
+    const partial = exact ?? friendDirectory.find((person) => {
       const nameParts = normalizePersonLookup(person.full_name).split(' ');
       return lookupParts.some((part) => nameParts.includes(part));
     });
 
-    return partial ? { ...item, personId: partial.id, personName: partial.full_name } : item;
+    if (partial) return { ...item, personId: partial.id, personName: partial.full_name };
+    return item.personId === currentUserId ? { ...item, personId: null } : item;
   }
 
   function appendMessage(role: ChatMessage['role'], text: string, usage?: TokenUsage | null) {

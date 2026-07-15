@@ -182,10 +182,10 @@ export async function createFriendLedgerEntry(input: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
   if (!input.amount || input.amount <= 0) throw new Error('Enter a valid amount.');
-  if (input.personId === user.id) throw new Error('Pick another person.');
 
-  let personId = input.personId ?? null;
   const personName = input.personName?.trim() ?? '';
+  let personId = input.personId === user.id && personName ? null : input.personId ?? null;
+  if (input.personId === user.id && !personName) throw new Error('Pick another person.');
 
   if (!personId && personName) {
     const { data: existing } = await supabase

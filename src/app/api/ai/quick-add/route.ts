@@ -385,15 +385,16 @@ export async function POST(request: Request) {
       getGroups(),
     ]);
     const findDirectoryPerson = (personId?: string | null, personName?: string | null) => {
-      if (personId && directory.some((person) => person.id === personId)) return personId;
+      const friendDirectory = directory.filter((person) => person.id !== profile.id);
+      if (personId && friendDirectory.some((person) => person.id === personId)) return personId;
       const lookup = normalizePersonLookup(personName ?? '');
       if (!lookup) return null;
 
-      const exact = directory.find((person) => normalizePersonLookup(person.full_name) === lookup);
+      const exact = friendDirectory.find((person) => normalizePersonLookup(person.full_name) === lookup);
       if (exact) return exact.id;
 
       const lookupParts = lookup.split(' ').filter(Boolean);
-      const partial = directory.find((person) => {
+      const partial = friendDirectory.find((person) => {
         const name = normalizePersonLookup(person.full_name);
         return lookupParts.some((part) => name.split(' ').includes(part));
       });
