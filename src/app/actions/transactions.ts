@@ -11,10 +11,50 @@ export interface SplitInput {
   amount: number;
 }
 
+function normalizeCategoryName(name: string) {
+  return name
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+export async function createCategory(input: {
+  name: string;
+  kind: 'expense' | 'income';
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const name = normalizeCategoryName(input.name);
+  if (!name) throw new Error('Category name is required.');
+
+  const { data, error } = await supabase
+    .from('categories')
+    .upsert({
+      user_id: user.id,
+      name,
+      kind: input.kind,
+      color: input.kind === 'income' ? '#3F7A5C' : '#B5544B',
+      icon: 'circle',
+    }, { onConflict: 'user_id,name,kind' })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/transactions');
+  revalidatePath('/dashboard/subscriptions');
+
+  return data as { id: string; name: string };
+}
+
 export async function createTransaction(input: {
   kind: TransactionKind;
   groupId?: string | null;
   categoryId: string | null;
+  createCategoryName?: string | null;
   amount: number;
   description: string;
   source?: string;
@@ -27,6 +67,14 @@ export async function createTransaction(input: {
 
   const isSplit = !!(input.splits && input.splits.length > 0);
   let categoryId = input.categoryId;
+
+  if (!categoryId && input.createCategoryName?.trim()) {
+    const category = await createCategory({
+      name: input.createCategoryName,
+      kind: input.kind === 'income' ? 'income' : 'expense',
+    });
+    categoryId = category.id;
+  }
 
   if (!categoryId) {
     const { data: categories } = await supabase.from('categories').select('*');
@@ -66,6 +114,72 @@ export async function createTransaction(input: {
       const { error: splitError } = await supabase.from('split_shares').insert(rows);
       if (splitError) throw new Error(splitError.message);
     }
+  }
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/transactions');
+  revalidatePath('/dashboard/splits');
+}
+
+export async function createFriendLedgerEntry(input: {
+  direction: 'borrowed' | 'lent';
+  personId: string;
+  amount: number;
+  description?: string | null;
+  occurredOn: string;
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  if (!input.amount || input.amount <= 0) throw new Error('Enter a valid amount.');
+  if (input.personId === user.id) throw new Error('Pick another person.');
+
+  const { data: person } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .eq('id', input.personId)
+    .single();
+  if (!person) throw new Error('Friend not found. Ask them to sign up first.');
+
+  const borrowed = input.direction === 'borrowed';
+  const description = input.description?.trim()
+    || (borrowed ? `Borrowed from ${person.full_name}` : `Lent to ${person.full_name}`);
+
+  const category = await createCategory({
+    name: borrowed ? 'Borrowed Money' : 'Money Lent',
+    kind: borrowed ? 'income' : 'expense',
+  });
+
+  const { data: transaction, error } = await supabase
+    .from('transactions')
+    .insert({
+      user_id: user.id,
+      kind: borrowed ? 'income' : 'expense',
+      category_id: category.id,
+      amount: input.amount,
+      description,
+      source: borrowed ? person.full_name : null,
+      occurred_on: input.occurredOn,
+      is_split: true,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  const { error: splitError } = await supabase.from('split_shares').insert({
+    transaction_id: transaction.id,
+    payer_id: borrowed ? input.personId : user.id,
+    owed_by_id: borrowed ? user.id : input.personId,
+    amount: input.amount,
+  });
+
+  if (splitError) {
+    throw new Error(
+      borrowed
+        ? `${splitError.message}. Run the latest Supabase split policy update so borrowed money can be tracked.`
+        : splitError.message
+    );
   }
 
   revalidatePath('/dashboard');

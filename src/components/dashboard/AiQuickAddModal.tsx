@@ -1,11 +1,11 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Bot, CalendarClock, Check, ChevronDown, ChevronUp, Loader2, Mic, Repeat2, Send, Square } from 'lucide-react';
+import { Bot, CalendarClock, Check, ChevronDown, ChevronUp, HandCoins, Loader2, Mic, Repeat2, Send, Square } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { createSubscription, createTransaction } from '@/app/actions/transactions';
+import { createFriendLedgerEntry, createSubscription, createTransaction } from '@/app/actions/transactions';
 import { Category, DirectoryUser, Group, TransactionKind } from '@/lib/types';
 import { cn } from '@/lib/utils/format';
 
@@ -16,6 +16,8 @@ type Draft = {
   source?: string | null;
   occurredOn: string;
   categoryId?: string | null;
+  suggestedCategoryName?: string | null;
+  createCategoryName?: string | null;
   groupId?: string | null;
   split?: {
     enabled: boolean;
@@ -23,6 +25,17 @@ type Draft = {
     peopleIds: string[];
     customAmounts?: Record<string, number>;
   };
+  confidence: number;
+  questions?: string[];
+};
+
+type FriendLedgerDraft = {
+  direction: 'borrowed' | 'lent';
+  amount: number | null;
+  personId?: string | null;
+  personName?: string | null;
+  description?: string | null;
+  occurredOn: string;
   confidence: number;
   questions?: string[];
 };
@@ -108,8 +121,10 @@ export function AiQuickAddModal({
   ]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [subscriptionDrafts, setSubscriptionDrafts] = useState<SubscriptionDraft[]>([]);
+  const [friendLedgerDrafts, setFriendLedgerDrafts] = useState<FriendLedgerDraft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState(0);
   const [selectedSubscriptionDraft, setSelectedSubscriptionDraft] = useState(0);
+  const [selectedFriendDraft, setSelectedFriendDraft] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [listening, setListening] = useState(false);
@@ -122,6 +137,7 @@ export function AiQuickAddModal({
 
   const draft = drafts[selectedDraft];
   const subscriptionDraft = subscriptionDrafts[selectedSubscriptionDraft];
+  const friendDraft = friendLedgerDrafts[selectedFriendDraft];
   const relevantCategories = useMemo(
     () => categories.filter((category) => category.kind === (draft?.kind === 'income' ? 'income' : 'expense')),
     [categories, draft?.kind]
@@ -149,6 +165,12 @@ export function AiQuickAddModal({
   function updateSubscriptionDraft(patch: Partial<SubscriptionDraft>) {
     setSubscriptionDrafts((current) =>
       current.map((item, index) => (index === selectedSubscriptionDraft ? { ...item, ...patch } : item))
+    );
+  }
+
+  function updateFriendDraft(patch: Partial<FriendLedgerDraft>) {
+    setFriendLedgerDrafts((current) =>
+      current.map((item, index) => (index === selectedFriendDraft ? { ...item, ...patch } : item))
     );
   }
 
@@ -198,10 +220,15 @@ export function AiQuickAddModal({
       if (!response.ok) throw new Error(data.error ?? 'Could not understand that.');
 
       appendMessage('assistant', data.reply ?? 'Done.');
-      setDrafts(data.drafts ?? []);
+      setDrafts((data.drafts ?? []).map((item: Draft) => ({
+        ...item,
+        createCategoryName: item.categoryId ? null : item.suggestedCategoryName ?? null,
+      })));
       setSubscriptionDrafts(data.subscriptionDrafts ?? []);
+      setFriendLedgerDrafts(data.friendLedgerDrafts ?? []);
       setSelectedDraft(0);
       setSelectedSubscriptionDraft(0);
+      setSelectedFriendDraft(0);
     } catch (err) {
       const text = err instanceof Error ? err.message : 'Could not understand that.';
       setError(text);
@@ -238,10 +265,15 @@ export function AiQuickAddModal({
         appendMessage('user', `Heard: ${data.transcript}`);
       }
       appendMessage('assistant', data.reply ?? 'Done.');
-      setDrafts(data.drafts ?? []);
+      setDrafts((data.drafts ?? []).map((item: Draft) => ({
+        ...item,
+        createCategoryName: item.categoryId ? null : item.suggestedCategoryName ?? null,
+      })));
       setSubscriptionDrafts(data.subscriptionDrafts ?? []);
+      setFriendLedgerDrafts(data.friendLedgerDrafts ?? []);
       setSelectedDraft(0);
       setSelectedSubscriptionDraft(0);
+      setSelectedFriendDraft(0);
     } catch (err) {
       const text = err instanceof Error ? err.message : 'Could not understand that voice note.';
       setError(text);
@@ -358,6 +390,7 @@ export function AiQuickAddModal({
           kind: item.kind,
           groupId: item.groupId ?? null,
           categoryId: item.categoryId ?? null,
+          createCategoryName: item.categoryId ? null : item.createCategoryName ?? null,
           amount: item.amount,
           description: item.description,
           source: item.kind === 'income' ? item.source ?? undefined : undefined,
@@ -408,6 +441,35 @@ export function AiQuickAddModal({
     }
   }
 
+  async function saveFriendLedgerDrafts() {
+    setError(null);
+    setSaving(true);
+    try {
+      for (const item of friendLedgerDrafts) {
+        if (!item.amount || item.amount <= 0) {
+          throw new Error('Every friend money draft needs a valid amount.');
+        }
+        if (!item.personId) {
+          throw new Error('Pick the friend for each friend money draft.');
+        }
+        await createFriendLedgerEntry({
+          direction: item.direction,
+          personId: item.personId,
+          amount: item.amount,
+          description: item.description,
+          occurredOn: item.occurredOn,
+        });
+      }
+      appendMessage('assistant', friendLedgerDrafts.length === 1 ? 'Friend balance saved.' : `Saved ${friendLedgerDrafts.length} friend balances.`);
+      setFriendLedgerDrafts([]);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save friend money drafts.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveEverything() {
     setError(null);
     setSaving(true);
@@ -422,6 +484,7 @@ export function AiQuickAddModal({
           kind: item.kind,
           groupId: item.groupId ?? null,
           categoryId: item.categoryId ?? null,
+          createCategoryName: item.categoryId ? null : item.createCategoryName ?? null,
           amount: item.amount,
           description: item.description,
           source: item.kind === 'income' ? item.source ?? undefined : undefined,
@@ -450,9 +513,26 @@ export function AiQuickAddModal({
         });
       }
 
-      appendMessage('assistant', `Saved ${drafts.length + subscriptionDrafts.length} items.`);
+      for (const item of friendLedgerDrafts) {
+        if (!item.amount || item.amount <= 0) {
+          throw new Error('Every friend money draft needs a valid amount.');
+        }
+        if (!item.personId) {
+          throw new Error('Pick the friend for each friend money draft.');
+        }
+        await createFriendLedgerEntry({
+          direction: item.direction,
+          personId: item.personId,
+          amount: item.amount,
+          description: item.description,
+          occurredOn: item.occurredOn,
+        });
+      }
+
+      appendMessage('assistant', `Saved ${drafts.length + subscriptionDrafts.length + friendLedgerDrafts.length} items.`);
       setDrafts([]);
       setSubscriptionDrafts([]);
+      setFriendLedgerDrafts([]);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save everything.');
@@ -505,11 +585,16 @@ export function AiQuickAddModal({
               )}
             </div>
 
-            {drafts.length > 0 && subscriptionDrafts.length > 0 && (
+            {(drafts.length > 0 || subscriptionDrafts.length > 0 || friendLedgerDrafts.length > 0)
+              && [drafts.length, subscriptionDrafts.length, friendLedgerDrafts.length].filter(Boolean).length > 1 && (
               <div className="mb-3 rounded-xl border border-emerald/30 bg-emerald/5 p-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-paper/70">
-                    Found {drafts.length} entr{drafts.length === 1 ? 'y' : 'ies'} and {subscriptionDrafts.length} subscription{subscriptionDrafts.length === 1 ? '' : 's'}.
+                    Found {[
+                      drafts.length ? `${drafts.length} entr${drafts.length === 1 ? 'y' : 'ies'}` : '',
+                      subscriptionDrafts.length ? `${subscriptionDrafts.length} subscription${subscriptionDrafts.length === 1 ? '' : 's'}` : '',
+                      friendLedgerDrafts.length ? `${friendLedgerDrafts.length} friend-money draft${friendLedgerDrafts.length === 1 ? '' : 's'}` : '',
+                    ].filter(Boolean).join(', ')}.
                   </p>
                   <Button type="button" size="sm" onClick={saveEverything} disabled={saving}>
                     {saving ? 'Saving...' : 'Save everything'}
@@ -564,7 +649,10 @@ export function AiQuickAddModal({
                     <label className="text-sm font-medium text-paper/70">Category</label>
                     <select
                       value={draft.categoryId ?? ''}
-                      onChange={(event) => updateDraft({ categoryId: event.target.value || null })}
+                      onChange={(event) => updateDraft({
+                        categoryId: event.target.value || null,
+                        createCategoryName: event.target.value ? null : draft.createCategoryName,
+                      })}
                       className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
                     >
                       <option value="">Uncategorized</option>
@@ -572,6 +660,23 @@ export function AiQuickAddModal({
                         <option key={category.id} value={category.id}>{category.name}</option>
                       ))}
                     </select>
+                    {!draft.categoryId && (
+                      <Input
+                        label="New category"
+                        value={draft.createCategoryName ?? ''}
+                        onChange={(event) => updateDraft({ createCategoryName: event.target.value })}
+                        placeholder="Create while saving"
+                      />
+                    )}
+                    {!draft.categoryId && draft.suggestedCategoryName && !draft.createCategoryName && (
+                      <button
+                        type="button"
+                        onClick={() => updateDraft({ createCategoryName: draft.suggestedCategoryName })}
+                        className="self-start text-xs font-medium text-emerald"
+                      >
+                        Use “{draft.suggestedCategoryName}”
+                      </button>
+                    )}
                   </div>
 
                   {groups.length > 0 && (
@@ -625,6 +730,85 @@ export function AiQuickAddModal({
 
                 <Button type="button" size="lg" onClick={saveDrafts} disabled={saving} className="mt-3 w-full">
                   {saving ? 'Saving...' : drafts.length === 1 ? 'Save draft' : `Save ${drafts.length} drafts`}
+                </Button>
+              </div>
+            )}
+
+            {friendLedgerDrafts.length > 0 && friendDraft && (
+              <div className="mb-3 rounded-xl border border-emerald/30 bg-emerald/5 p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald/15 text-emerald">
+                      <HandCoins size={16} />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Friend money draft</p>
+                      <p className="text-xs text-paper/45">Borrowed and lent money goes into split balances.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {friendLedgerDrafts.map((item, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => setSelectedFriendDraft(index)}
+                      className={cn(
+                        'rounded-full border px-3 py-1 text-xs font-medium',
+                        selectedFriendDraft === index ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/50'
+                      )}
+                    >
+                      Friend {index + 1}: {item.amount ? `₹${item.amount}` : 'Needs amount'}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid grid-cols-2 gap-2 sm:col-span-2">
+                    {(['borrowed', 'lent'] as const).map((direction) => (
+                      <button
+                        key={direction}
+                        type="button"
+                        onClick={() => updateFriendDraft({ direction })}
+                        className={cn(
+                          'rounded-lg border py-2 text-xs font-medium',
+                          friendDraft.direction === direction ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/60'
+                        )}
+                      >
+                        {direction === 'borrowed' ? 'I borrowed' : 'I lent'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <Input label="Amount" type="number" min="0.01" step="0.01" value={friendDraft.amount ?? ''} onChange={(event) => updateFriendDraft({ amount: parseFloat(event.target.value) || null })} />
+                  <Input label="Date" type="date" value={friendDraft.occurredOn} onChange={(event) => updateFriendDraft({ occurredOn: event.target.value })} />
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-paper/70">Friend</label>
+                    <select
+                      value={friendDraft.personId ?? ''}
+                      onChange={(event) => updateFriendDraft({ personId: event.target.value || null })}
+                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                    >
+                      <option value="">{friendDraft.personName ? `Find ${friendDraft.personName}` : 'Pick friend'}</option>
+                      {directory.filter((person) => person.id !== currentUserId).map((person) => (
+                        <option key={person.id} value={person.id}>{person.full_name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <Input label="Note" value={friendDraft.description ?? ''} onChange={(event) => updateFriendDraft({ description: event.target.value })} />
+                </div>
+
+                {friendDraft.questions && friendDraft.questions.length > 0 && (
+                  <p className="mt-3 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-sm text-paper/70">
+                    {friendDraft.questions.join(' ')}
+                  </p>
+                )}
+
+                <Button type="button" size="lg" onClick={saveFriendLedgerDrafts} disabled={saving} className="mt-3 w-full">
+                  {saving ? 'Saving...' : friendLedgerDrafts.length === 1 ? 'Save friend balance' : `Save ${friendLedgerDrafts.length} friend balances`}
                 </Button>
               </div>
             )}

@@ -20,6 +20,7 @@ type ParsedDraft = {
   source?: string | null;
   occurredOn: string;
   categoryId?: string | null;
+  suggestedCategoryName?: string | null;
   groupId?: string | null;
   split?: {
     enabled: boolean;
@@ -27,6 +28,17 @@ type ParsedDraft = {
     peopleIds: string[];
     customAmounts?: Record<string, number>;
   };
+  confidence: number;
+  questions?: string[];
+};
+
+type ParsedFriendLedgerDraft = {
+  direction: 'borrowed' | 'lent';
+  amount: number | null;
+  personId?: string | null;
+  personName?: string | null;
+  description?: string | null;
+  occurredOn: string;
   confidence: number;
   questions?: string[];
 };
@@ -264,6 +276,12 @@ export async function POST(request: Request) {
             'One long voice note can contain many entries. Split every clear expense, income, investment, and subscription into its own draft.',
             'Use commas, "and", "also", "then", pauses, or sentence breaks as hints for separate drafts.',
             'Example: "spent 100 chai and 250 cab and got 5000 from dad" means two expense drafts and one income draft.',
+            'Friend money is not vendor spend. If user says borrowed/took money from a friend, return friendLedgerDrafts direction borrowed.',
+            'If user says lent/gave/paid for a friend and they should return it, return friendLedgerDrafts direction lent.',
+            'Phrases like "took money from Rahul", "take money from Rahul", "borrowed from Rahul" mean borrowed.',
+            'Use friendLedgerDrafts only when a friend/person is involved in lending or borrowing, not for shops, vendors, salary, or refunds.',
+            'For vendor/shop payments, return normal expense drafts and keep the vendor or merchant name in description for history search.',
+            'If no category ID matches well, suggest a short category name in suggestedCategoryName.',
             'If the user mentions subscriptions, recurring payments, renewals, EMI, rent, membership, or every month, return subscriptionDrafts.',
             'Do not also create a normal expense draft for a subscription unless the user clearly says it was paid today.',
             'For subscription billingDay, infer day of month if mentioned, otherwise use today day.',
@@ -286,6 +304,7 @@ export async function POST(request: Request) {
                   source: 'income source or null',
                   occurredOn: 'YYYY-MM-DD',
                   categoryId: 'matching category id or null',
+                  suggestedCategoryName: 'new category name if no category fits, else null',
                   groupId: 'matching group id or null',
                   split: {
                     enabled: 'boolean',
@@ -310,6 +329,18 @@ export async function POST(request: Request) {
                   questions: ['short confirmation questions if needed'],
                 },
               ],
+              friendLedgerDrafts: [
+                {
+                  direction: 'borrowed | lent',
+                  amount: 'number or null',
+                  personId: 'matching friend id or null',
+                  personName: 'friend name if mentioned',
+                  description: 'short description',
+                  occurredOn: 'YYYY-MM-DD',
+                  confidence: '0 to 1',
+                  questions: ['short confirmation questions if needed'],
+                },
+              ],
             },
           }),
         },
@@ -319,7 +350,12 @@ export async function POST(request: Request) {
     const content = completion.choices[0]?.message?.content;
     if (!content) return jsonError('AI did not return a draft.', 502);
 
-    const parsed = extractJson(content) as { reply?: string; drafts?: ParsedDraft[]; subscriptionDrafts?: ParsedSubscriptionDraft[] };
+    const parsed = extractJson(content) as {
+      reply?: string;
+      drafts?: ParsedDraft[];
+      subscriptionDrafts?: ParsedSubscriptionDraft[];
+      friendLedgerDrafts?: ParsedFriendLedgerDraft[];
+    };
     const drafts = (parsed.drafts ?? []).map((draft) => ({
       kind: draft.kind,
       amount: typeof draft.amount === 'number' ? draft.amount : null,
@@ -327,8 +363,19 @@ export async function POST(request: Request) {
       source: draft.source ?? null,
       occurredOn: draft.occurredOn || today,
       categoryId: draft.categoryId ?? inferCategory(draft.kind, `${draft.description ?? ''} ${draft.source ?? ''}`, categories)?.id ?? null,
+      suggestedCategoryName: draft.suggestedCategoryName ?? null,
       groupId: draft.groupId ?? null,
       split: draft.split ?? { enabled: false, mode: 'equal', peopleIds: [] },
+      confidence: typeof draft.confidence === 'number' ? draft.confidence : 0.5,
+      questions: draft.questions ?? [],
+    }));
+    const friendLedgerDrafts = (parsed.friendLedgerDrafts ?? []).map((draft) => ({
+      direction: draft.direction === 'lent' ? 'lent' : 'borrowed',
+      amount: typeof draft.amount === 'number' ? draft.amount : null,
+      personId: draft.personId ?? null,
+      personName: draft.personName ?? null,
+      description: draft.description ?? '',
+      occurredOn: draft.occurredOn || today,
       confidence: typeof draft.confidence === 'number' ? draft.confidence : 0.5,
       questions: draft.questions ?? [],
     }));
@@ -347,9 +394,10 @@ export async function POST(request: Request) {
     return Response.json({
       transcript,
       normalizedTranscript,
-      reply: parsed.reply ?? (drafts.length > 0 || subscriptionDrafts.length > 0 ? 'I made a draft. Review it before saving.' : 'Got it.'),
+      reply: parsed.reply ?? (drafts.length > 0 || subscriptionDrafts.length > 0 || friendLedgerDrafts.length > 0 ? 'I made a draft. Review it before saving.' : 'Got it.'),
       drafts,
       subscriptionDrafts,
+      friendLedgerDrafts,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'AI request failed.';

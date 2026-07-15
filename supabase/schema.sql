@@ -271,11 +271,11 @@ create policy "Split shares visible to payer and ower"
   to authenticated
   using (auth.uid() = payer_id or auth.uid() = owed_by_id);
 
-create policy "Payer can create split shares for their transactions"
+create policy "Users can create split shares for their own ledger entries"
   on public.split_shares for insert
   to authenticated
   with check (
-    auth.uid() = payer_id
+    (auth.uid() = payer_id or auth.uid() = owed_by_id)
     and exists (
       select 1 from public.transactions t
       where t.id = transaction_id and t.user_id = auth.uid()
