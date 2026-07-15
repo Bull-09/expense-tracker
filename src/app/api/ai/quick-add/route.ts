@@ -69,6 +69,19 @@ function looksLikeFriendMoneyDraft(draft: ParsedDraft) {
   return /\b(borrowed|borrow|took money|take money|lent|lend|gave money|udhaar|loaned)\b/.test(text);
 }
 
+function looksLikeSubscriptionDraft(draft: ParsedDraft) {
+  const text = `${draft.description ?? ''} ${draft.source ?? ''} ${draft.suggestedCategoryName ?? ''}`.toLowerCase();
+  return /\b(subscription|subscribe|subscribed|recurring|renewal|renews|monthly|weekly|every month|every week|emi|membership|netflix|spotify|prime|youtube premium|icloud|google one|notion|chatgpt|openai)\b/.test(text);
+}
+
+function subscriptionNameFromDraft(draft: ParsedDraft) {
+  const text = `${draft.description ?? draft.source ?? ''}`
+    .replace(/\b(subscription|subscribed|monthly|weekly|recurring|renewal|payment|paid|spent|for|on)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text || draft.source || draft.description || 'Subscription';
+}
+
 type ParsedFriendLedgerDraft = {
   direction: 'borrowed' | 'lent';
   amount: number | null;
@@ -385,6 +398,7 @@ export async function POST(request: Request) {
             'For vendor/shop payments, return normal expense drafts and keep the vendor or merchant name in description for history search.',
             'If no category ID matches well, suggest a short category name in suggestedCategoryName.',
             'If the user mentions subscriptions, recurring payments, renewals, EMI, rent, membership, every week, or every month, return subscriptionDrafts.',
+            'Words like "Netflix subscription", "Spotify subscription", "Prime subscription", "ChatGPT subscription", or "iCloud subscription" are subscriptionDrafts even if the user does not say monthly.',
             'Do not also create a normal expense draft for a subscription unless the user clearly says it was paid today.',
             'For subscription frequency, use weekly for every week/weekly and monthly for every month/monthly. Default to monthly.',
             'For subscription billingDay, infer day of month if mentioned, otherwise use today day.',
@@ -461,8 +475,24 @@ export async function POST(request: Request) {
       subscriptionDrafts?: ParsedSubscriptionDraft[];
       friendLedgerDrafts?: ParsedFriendLedgerDraft[];
     };
-    const drafts = (parsed.drafts ?? [])
+    const rawDrafts = parsed.drafts ?? [];
+    const subscriptionFallbacks = rawDrafts
+      .filter((draft) => !looksLikeFriendMoneyDraft(draft) && looksLikeSubscriptionDraft(draft))
+      .map((draft) => ({
+        name: subscriptionNameFromDraft(draft),
+        amount: typeof draft.amount === 'number' ? draft.amount : null,
+        billingDay: new Date(today).getDate(),
+        frequency: 'monthly' as const,
+        nextDueOn: normalizeDraftDate(draft.occurredOn, today, normalizedTranscript),
+        categoryId: draft.categoryId ?? inferCategory('expense', `${draft.description ?? ''} ${draft.source ?? ''}`, categories)?.id ?? null,
+        groupId: draft.groupId ?? null,
+        notes: draft.description ?? null,
+        confidence: typeof draft.confidence === 'number' ? Math.min(draft.confidence, 0.85) : 0.75,
+        questions: draft.questions ?? [],
+      }));
+    const drafts = rawDrafts
       .filter((draft) => !looksLikeFriendMoneyDraft(draft))
+      .filter((draft) => !looksLikeSubscriptionDraft(draft))
       .map((draft) => ({
       kind: normalizeDraftKind(draft.kind),
       amount: typeof draft.amount === 'number' ? draft.amount : null,
@@ -486,7 +516,8 @@ export async function POST(request: Request) {
       confidence: typeof draft.confidence === 'number' ? draft.confidence : 0.5,
       questions: draft.questions ?? [],
     }));
-    const subscriptionDrafts = (parsed.subscriptionDrafts ?? []).map((draft) => ({
+    const subscriptionDrafts = [
+      ...(parsed.subscriptionDrafts ?? []).map((draft) => ({
       name: draft.name ?? '',
       amount: typeof draft.amount === 'number' ? draft.amount : null,
       billingDay: typeof draft.billingDay === 'number' ? Math.min(Math.max(Math.trunc(draft.billingDay), 1), 31) : new Date(today).getDate(),
@@ -497,7 +528,9 @@ export async function POST(request: Request) {
       notes: draft.notes ?? null,
       confidence: typeof draft.confidence === 'number' ? draft.confidence : 0.5,
       questions: draft.questions ?? [],
-    }));
+      })),
+      ...subscriptionFallbacks,
+    ];
 
     return Response.json({
       transcript,
