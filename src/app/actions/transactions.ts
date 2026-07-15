@@ -18,6 +18,11 @@ function normalizeCategoryName(name: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function isTransactionKindConstraintError(error: { message?: string; code?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return message.includes('transactions_kind_check') || message.includes('violates check constraint');
+}
+
 export async function createCategory(input: {
   name: string;
   kind: 'expense' | 'income';
@@ -68,7 +73,9 @@ export async function createTransaction(input: {
   const isSplit = !!(input.splits && input.splits.length > 0);
   let categoryId = input.categoryId;
 
-  if (!categoryId && input.createCategoryName?.trim()) {
+  if (input.kind === 'transfer') {
+    categoryId = null;
+  } else if (!categoryId && input.createCategoryName?.trim()) {
     const category = await createCategory({
       name: input.createCategoryName,
       kind: input.kind === 'income' ? 'income' : 'expense',
@@ -76,7 +83,7 @@ export async function createTransaction(input: {
     categoryId = category.id;
   }
 
-  if (!categoryId) {
+  if (!categoryId && input.kind !== 'transfer') {
     const { data: categories } = await supabase.from('categories').select('*');
     const inferred = inferCategory(input.kind, `${input.description} ${input.source ?? ''}`, categories ?? []);
     categoryId = inferred?.id ?? null;
@@ -91,14 +98,19 @@ export async function createTransaction(input: {
       category_id: categoryId,
       amount: input.amount,
       description: input.description,
-      source: input.source ?? null,
+      source: input.kind === 'income' || input.kind === 'transfer' ? input.source ?? null : null,
       occurred_on: input.occurredOn,
       is_split: isSplit,
     })
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (input.kind === 'transfer' && isTransactionKindConstraintError(error)) {
+      throw new Error('Transfer activity needs the latest Supabase migration. Run supabase/updates/2026-07-16-transfer-transactions.sql once.');
+    }
+    throw new Error(error.message);
+  }
 
   if (isSplit && input.splits) {
     const rows = input.splits
@@ -145,27 +157,27 @@ export async function createFriendLedgerEntry(input: {
   const description = input.description?.trim()
     || (borrowed ? `Borrowed from ${person.full_name}` : `Lent to ${person.full_name}`);
 
-  const category = await createCategory({
-    name: borrowed ? 'Borrowed Money' : 'Money Lent',
-    kind: borrowed ? 'income' : 'expense',
-  });
-
   const { data: transaction, error } = await supabase
     .from('transactions')
     .insert({
       user_id: user.id,
-      kind: borrowed ? 'income' : 'expense',
-      category_id: category.id,
+      kind: 'transfer',
+      category_id: null,
       amount: input.amount,
       description,
-      source: borrowed ? person.full_name : null,
+      source: borrowed ? `From ${person.full_name}` : `To ${person.full_name}`,
       occurred_on: input.occurredOn,
       is_split: true,
     })
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isTransactionKindConstraintError(error)) {
+      throw new Error('Friend money tracking needs the latest Supabase migration. Run supabase/updates/2026-07-16-transfer-transactions.sql once.');
+    }
+    throw new Error(error.message);
+  }
 
   const { error: splitError } = await supabase.from('split_shares').insert({
     transaction_id: transaction.id,
@@ -310,14 +322,14 @@ export async function updateTransaction(input: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
-  let categoryId = input.categoryId;
-  if (!categoryId) {
+  let categoryId = input.kind === 'transfer' ? null : input.categoryId;
+  if (!categoryId && input.kind !== 'transfer') {
     const { data: categories } = await supabase.from('categories').select('*');
     const inferred = inferCategory(input.kind, `${input.description} ${input.source ?? ''}`, categories ?? []);
     categoryId = inferred?.id ?? null;
   }
 
-  const isSplit = input.kind === 'expense' && !!(input.splits && input.splits.length > 0);
+  const isSplit = (input.kind === 'expense' || input.kind === 'transfer') && !!(input.splits && input.splits.length > 0);
 
   const { error } = await supabase
     .from('transactions')
@@ -327,14 +339,19 @@ export async function updateTransaction(input: {
       category_id: categoryId,
       amount: input.amount,
       description: input.description,
-      source: input.kind === 'income' ? input.source ?? null : null,
+      source: input.kind === 'income' || input.kind === 'transfer' ? input.source ?? null : null,
       occurred_on: input.occurredOn,
       is_split: isSplit,
     })
     .eq('id', input.id)
     .eq('user_id', user.id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (input.kind === 'transfer' && isTransactionKindConstraintError(error)) {
+      throw new Error('Transfer activity needs the latest Supabase migration. Run supabase/updates/2026-07-16-transfer-transactions.sql once.');
+    }
+    throw new Error(error.message);
+  }
 
   const { error: deleteSplitError } = await supabase
     .from('split_shares')

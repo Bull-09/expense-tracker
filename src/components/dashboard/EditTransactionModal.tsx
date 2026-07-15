@@ -14,6 +14,7 @@ const KIND_LABELS: Record<TransactionKind, string> = {
   expense: 'Expense',
   income: 'Income',
   investment: 'Investment',
+  transfer: 'Transfer',
 };
 
 export function EditTransactionModal({
@@ -100,7 +101,7 @@ export function EditTransactionModal({
         categoryId: effectiveCategoryId || null,
         amount: numAmount,
         description,
-        source: kind === 'income' ? source : undefined,
+        source: kind === 'income' || kind === 'transfer' ? source : undefined,
         occurredOn,
         splits: splitEnabled
           ? selectedFriends.map((id) => ({
@@ -130,7 +131,7 @@ export function EditTransactionModal({
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-5">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(Object.keys(KIND_LABELS) as TransactionKind[]).map((k) => (
               <button
                 key={k}
@@ -139,7 +140,7 @@ export function EditTransactionModal({
                   setKind(k);
                   setCategoryId('');
                   setCategoryTouched(false);
-                  if (k !== 'expense') setSplitEnabled(false);
+                  if (k !== 'expense' && k !== 'transfer') setSplitEnabled(false);
                 }}
                 className={cn(
                   'rounded-lg border py-2 text-sm font-medium transition-colors',
@@ -154,10 +155,15 @@ export function EditTransactionModal({
           <Input label="Amount" type="number" inputMode="decimal" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
           <Input label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
 
-          {kind === 'income' && (
-            <Input label="Source (optional)" value={source} onChange={(e) => setSource(e.target.value)} />
+          {(kind === 'income' || kind === 'transfer') && (
+            <Input
+              label={kind === 'transfer' ? 'Person (optional)' : 'Source (optional)'}
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+            />
           )}
 
+          {kind !== 'transfer' && (
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-paper/70">Category</label>
             <select
@@ -177,6 +183,7 @@ export function EditTransactionModal({
               <p className="text-xs text-emerald">Auto-selected: {suggestedCategory.name}</p>
             )}
           </div>
+          )}
 
           {groups.length > 0 && (
             <div className="flex flex-col gap-1.5">

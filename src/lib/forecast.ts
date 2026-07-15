@@ -52,6 +52,7 @@ export function estimateMoneyFlow(transactions: Transaction[], now = new Date())
   const monthly = new Map<string, MonthlyTotals>();
 
   for (const transaction of transactions) {
+    if (transaction.kind === 'transfer') continue;
     const date = new Date(transaction.occurred_on);
     const key = monthKey(date);
     const totals = monthly.get(key) ?? emptyTotals();

@@ -62,6 +62,7 @@ function normalize(value: string) {
 }
 
 function categoryKindFor(kind: TransactionKind) {
+  if (kind === 'transfer') return null;
   return kind === 'income' ? 'income' : 'expense';
 }
 
@@ -71,6 +72,7 @@ export function inferCategory(
   categories: Category[]
 ) {
   const categoryKind = categoryKindFor(kind);
+  if (!categoryKind) return null;
   const normalizedText = normalize(text);
   const relevantCategories = categories.filter((category) => category.kind === categoryKind);
 

@@ -82,12 +82,13 @@ create policy "Users manage their own categories"
 
 -- ----------------------------------------------------------------------------
 -- 3. TRANSACTIONS
--- Single table for expenses, income, and investments (distinguished by `kind`).
+-- Single table for expenses, income, investments, and neutral transfers
+-- (distinguished by `kind`).
 -- ----------------------------------------------------------------------------
 create table if not exists public.transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
-  kind text not null check (kind in ('expense', 'income', 'investment')),
+  kind text not null check (kind in ('expense', 'income', 'investment', 'transfer')),
   category_id uuid references public.categories(id) on delete set null,
   amount numeric(12,2) not null check (amount > 0),
   currency text not null default 'INR',

@@ -1,4 +1,4 @@
-export type TransactionKind = 'expense' | 'income' | 'investment';
+export type TransactionKind = 'expense' | 'income' | 'investment' | 'transfer';
 export type CategoryKind = 'expense' | 'income';
 
 export interface Profile {

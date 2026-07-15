@@ -10,7 +10,7 @@ import { Category, DirectoryUser, Group, TransactionKind } from '@/lib/types';
 import { cn } from '@/lib/utils/format';
 
 type Draft = {
-  kind: TransactionKind;
+  kind: Exclude<TransactionKind, 'transfer'>;
   amount: number | null;
   description: string;
   source?: string | null;
@@ -82,7 +82,9 @@ interface SpeechRecognitionEvent {
   };
 }
 
-const KIND_LABELS: Record<TransactionKind, string> = {
+type MoneyEntryKind = Exclude<TransactionKind, 'transfer'>;
+
+const KIND_LABELS: Record<MoneyEntryKind, string> = {
   expense: 'Expense',
   income: 'Income',
   investment: 'Investment',
@@ -669,7 +671,7 @@ export function AiQuickAddModal({
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid grid-cols-3 gap-2 sm:col-span-2">
-                    {(Object.keys(KIND_LABELS) as TransactionKind[]).map((kind) => (
+                    {(Object.keys(KIND_LABELS) as MoneyEntryKind[]).map((kind) => (
                       <button
                         key={kind}
                         type="button"

@@ -3,12 +3,13 @@ import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/Card';
 import { formatCurrency } from '@/lib/utils/format';
 import { format } from 'date-fns';
 import Link from 'next/link';
-import { ArrowUpRight, ArrowDownRight, PiggyBank } from 'lucide-react';
+import { ArrowLeftRight, ArrowUpRight, ArrowDownRight, PiggyBank } from 'lucide-react';
 
 const kindConfig = {
   income: { icon: ArrowUpRight, color: 'text-emerald', sign: '+' },
   expense: { icon: ArrowDownRight, color: 'text-clay', sign: '-' },
   investment: { icon: PiggyBank, color: 'text-gold', sign: '-' },
+  transfer: { icon: ArrowLeftRight, color: 'text-sky-300', sign: '' },
 };
 
 export function RecentTransactions({ transactions }: { transactions: Transaction[] }) {
@@ -30,7 +31,7 @@ export function RecentTransactions({ transactions }: { transactions: Transaction
         ) : (
           <div className="flex flex-col">
             {recent.map((t) => {
-              const config = kindConfig[t.kind];
+              const config = kindConfig[t.kind] ?? kindConfig.transfer;
               const Icon = config.icon;
               return (
                 <div key={t.id} className="flex items-center justify-between py-2.5 border-b border-ink-border last:border-0">

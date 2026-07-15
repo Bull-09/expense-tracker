@@ -4,7 +4,7 @@ import { useState, useMemo, useTransition } from 'react';
 import { Category, DirectoryUser, Group, Transaction, TransactionKind } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
 import { format } from 'date-fns';
-import { ArrowUpRight, ArrowDownRight, PiggyBank, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, ArrowUpRight, ArrowDownRight, PiggyBank, Pencil, Trash2 } from 'lucide-react';
 import { deleteTransaction } from '@/app/actions/transactions';
 import { cn } from '@/lib/utils/format';
 import { EditTransactionModal } from './EditTransactionModal';
@@ -13,6 +13,7 @@ const kindConfig: Record<TransactionKind, { icon: typeof ArrowUpRight; color: st
   income: { icon: ArrowUpRight, color: 'text-emerald', sign: '+' },
   expense: { icon: ArrowDownRight, color: 'text-clay', sign: '-' },
   investment: { icon: PiggyBank, color: 'text-gold', sign: '-' },
+  transfer: { icon: ArrowLeftRight, color: 'text-sky-300', sign: '' },
 };
 
 const FILTERS: { label: string; value: TransactionKind | 'all' }[] = [
@@ -20,6 +21,7 @@ const FILTERS: { label: string; value: TransactionKind | 'all' }[] = [
   { label: 'Income', value: 'income' },
   { label: 'Expense', value: 'expense' },
   { label: 'Investment', value: 'investment' },
+  { label: 'Transfers', value: 'transfer' },
 ];
 
 export function TransactionsList({
@@ -77,7 +79,7 @@ export function TransactionsList({
       ) : (
         <div className="rounded-xl border border-ink-border bg-ink-raised divide-y divide-ink-border">
           {filtered.map((t) => {
-            const config = kindConfig[t.kind];
+            const config = kindConfig[t.kind] ?? kindConfig.transfer;
             const Icon = config.icon;
             const deleting = isPending && pendingDelete === t.id;
             return (

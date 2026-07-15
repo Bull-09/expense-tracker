@@ -14,6 +14,7 @@ const KIND_LABELS: Record<TransactionKind, string> = {
   expense: 'Expense',
   income: 'Income',
   investment: 'Investment',
+  transfer: 'Transfer',
 };
 
 export function AddTransactionModal({
@@ -47,7 +48,7 @@ export function AddTransactionModal({
   const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
 
   const relevantCategories = useMemo(
-    () => categories.filter((c) => c.kind === (kind === 'expense' || kind === 'investment' ? 'expense' : 'income')),
+    () => categories.filter((c) => c.kind === (kind === 'income' ? 'income' : 'expense')),
     [categories, kind]
   );
   const suggestedCategory = useMemo(
@@ -108,7 +109,7 @@ export function AddTransactionModal({
         categoryId: effectiveCategoryId || null,
         amount: numAmount,
         description,
-        source: kind === 'income' ? source : undefined,
+        source: kind === 'income' || kind === 'transfer' ? source : undefined,
         occurredOn,
         splits,
       });
@@ -134,7 +135,7 @@ export function AddTransactionModal({
 
         <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
           {/* Kind selector */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(Object.keys(KIND_LABELS) as TransactionKind[]).map((k) => (
               <button
                 key={k}
@@ -171,15 +172,16 @@ export function AddTransactionModal({
             onChange={(e) => setDescription(e.target.value)}
           />
 
-          {kind === 'income' && (
+          {(kind === 'income' || kind === 'transfer') && (
             <Input
-              label="Source (optional)"
-              placeholder="e.g. Upwork, Client name"
+              label={kind === 'transfer' ? 'Person (optional)' : 'Source (optional)'}
+              placeholder={kind === 'transfer' ? 'e.g. Rahul, Ananya' : 'e.g. Upwork, Client name'}
               value={source}
               onChange={(e) => setSource(e.target.value)}
             />
           )}
 
+          {kind !== 'transfer' && (
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-paper/70">Category</label>
             <select
@@ -199,6 +201,7 @@ export function AddTransactionModal({
               <p className="text-xs text-emerald">Auto-selected: {suggestedCategory.name}</p>
             )}
           </div>
+          )}
 
           {groups.length > 0 && (
             <div className="flex flex-col gap-1.5">
