@@ -1,4 +1,4 @@
-import { getCurrentProfile, getSplitShares, computeBalances } from '@/lib/data/dashboard';
+import { getCurrentProfile, getDirectory, getSplitShares, computeBalances } from '@/lib/data/dashboard';
 import { SplitsList } from '@/components/dashboard/SplitsList';
 import { BalancesCard } from '@/components/dashboard/BalancesCard';
 
@@ -6,7 +6,10 @@ export default async function SplitsPage() {
   const profile = await getCurrentProfile();
   if (!profile) return null;
 
-  const splitShares = await getSplitShares();
+  const [splitShares, directory] = await Promise.all([
+    getSplitShares(),
+    getDirectory(),
+  ]);
   const balances = computeBalances(splitShares, profile.id);
 
   const totalOwedToYou = splitShares
@@ -25,7 +28,7 @@ export default async function SplitsPage() {
 
       <BalancesCard balances={balances} totalOwedToYou={totalOwedToYou} totalYouOwe={totalYouOwe} />
 
-      <SplitsList splitShares={splitShares} currentUserId={profile.id} />
+      <SplitsList splitShares={splitShares} currentUserId={profile.id} directory={directory} />
     </div>
   );
 }

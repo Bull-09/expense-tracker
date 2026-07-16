@@ -1,21 +1,60 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { SplitShare } from '@/lib/types';
+import { useEffect, useState, useTransition } from 'react';
+import type { FormEvent } from 'react';
+import { DirectoryUser, SplitShare } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
 import { format } from 'date-fns';
-import { Bell, CheckCircle2 } from 'lucide-react';
-import { recordSplitReminder, settleSplitShare } from '@/app/actions/transactions';
+import { Bell, CheckCircle2, Check, Copy, HandCoins, Share2, UserPlus } from 'lucide-react';
+import { createFriendLedgerEntry, recordSplitReminder, settleSplitShare } from '@/app/actions/transactions';
 import { cn } from '@/lib/utils/format';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 
-export function SplitsList({ splitShares, currentUserId }: { splitShares: SplitShare[]; currentUserId: string }) {
+export function SplitsList({
+  splitShares,
+  currentUserId,
+  directory,
+}: {
+  splitShares: SplitShare[];
+  currentUserId: string;
+  directory: DirectoryUser[];
+}) {
   const [isPending, startTransition] = useTransition();
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [remindingId, setRemindingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showSettled, setShowSettled] = useState(false);
+  const [direction, setDirection] = useState<'lent' | 'borrowed'>('lent');
+  const [amount, setAmount] = useState('');
+  const [personId, setPersonId] = useState('');
+  const [personName, setPersonName] = useState('');
+  const [note, setNote] = useState('');
+  const [occurredOn, setOccurredOn] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [copied, setCopied] = useState(false);
+  const [appUrl, setAppUrl] = useState('');
+  const [hasNativeShare, setHasNativeShare] = useState(false);
 
   const visible = splitShares.filter((s) => (showSettled ? true : !s.settled));
+  const friends = directory.filter((person) => person.id !== currentUserId);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setAppUrl(window.location.origin);
+      setHasNativeShare('share' in navigator);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  function resetForm() {
+    setAmount('');
+    setPersonId('');
+    setPersonName('');
+    setNote('');
+    setOccurredOn(format(new Date(), 'yyyy-MM-dd'));
+    setDirection('lent');
+  }
 
   function handleSettle(id: string) {
     setSettlingId(id);
@@ -40,18 +79,154 @@ export function SplitsList({ splitShares, currentUserId }: { splitShares: SplitS
     });
   }
 
+  function handleCreateSplit(event: FormEvent) {
+    event.preventDefault();
+    const numericAmount = parseFloat(amount);
+    setNotice(null);
+
+    if (!numericAmount || numericAmount <= 0) {
+      setNotice('Add a valid amount first.');
+      return;
+    }
+    if (!personId && !personName.trim()) {
+      setNotice('Pick a friend or type a new friend name.');
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await createFriendLedgerEntry({
+          direction,
+          personId: personId || null,
+          personName: personId ? null : personName.trim(),
+          amount: numericAmount,
+          description: note.trim() || (direction === 'lent' ? `Lent ${formatCurrency(numericAmount)}` : `Borrowed ${formatCurrency(numericAmount)}`),
+          occurredOn,
+        });
+        setNotice(direction === 'lent' ? 'Saved. This person now owes you.' : 'Saved. You now owe this person.');
+        resetForm();
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : 'Could not save split.');
+      }
+    });
+  }
+
+  async function handleInvite() {
+    if (!appUrl) return;
+
+    if (hasNativeShare) {
+      await navigator.share({
+        title: 'Join my C-137 Capital',
+        text: 'Track shared expenses with me on C-137 Capital.',
+        url: appUrl,
+      });
+      return;
+    }
+
+    await navigator.clipboard.writeText(appUrl);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  }
+
+  const splitForm = (
+    <form onSubmit={handleCreateSplit} className="rounded-xl border border-emerald/30 bg-emerald/5 p-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald/15 text-emerald">
+            <HandCoins size={18} />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold text-paper">Add split balance</h2>
+            <p className="text-xs text-paper/45">Track money owed without making it income or expense.</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleInvite}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-ink-border px-3 py-2 text-sm font-medium text-paper/60 hover:border-emerald/40 hover:text-emerald"
+        >
+          {copied ? <Check size={15} /> : hasNativeShare ? <Share2 size={15} /> : <Copy size={15} />}
+          {copied ? 'Copied invite' : 'Invite'}
+        </button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <label className="text-sm font-medium text-paper/70">Type</label>
+          <select
+            value={direction}
+            onChange={(event) => setDirection(event.target.value as 'lent' | 'borrowed')}
+            className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+          >
+            <option value="lent">I paid / lent money, they owe me</option>
+            <option value="borrowed">They paid / lent money, I owe them</option>
+          </select>
+        </div>
+        <Input label="Amount" type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="2000" />
+        <Input label="Date" type="date" value={occurredOn} onChange={(event) => setOccurredOn(event.target.value)} />
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-paper/70">Friend</label>
+          <select
+            value={personId}
+            onChange={(event) => {
+              setPersonId(event.target.value);
+              if (event.target.value) setPersonName('');
+            }}
+            className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+          >
+            <option value="">Add new friend</option>
+            {friends.map((person) => (
+              <option key={person.id} value={person.id}>{person.full_name}</option>
+            ))}
+          </select>
+        </div>
+        <Input
+          label="New friend name"
+          value={personName}
+          onChange={(event) => {
+            setPersonName(event.target.value);
+            if (event.target.value.trim()) setPersonId('');
+          }}
+          placeholder="Rahul"
+          disabled={!!personId}
+        />
+        <Input label="Note" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Dinner, EMI, cab, loan..." className="sm:col-span-2" />
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <Button type="submit" disabled={isPending}>
+          <UserPlus size={16} />
+          {isPending ? 'Saving...' : 'Save split'}
+        </Button>
+        <p className="text-xs text-paper/40">
+          New friends are created on save. Invite link lets them join later.
+        </p>
+      </div>
+    </form>
+  );
+
   if (splitShares.length === 0) {
     return (
-      <div className="rounded-xl border border-ink-border bg-ink-raised p-10 text-center">
-        <p className="text-paper/40 text-sm">
-          No split expenses yet. Split one with a friend and it&apos;ll show up here.
-        </p>
+      <div className="flex flex-col gap-4">
+        {splitForm}
+        {notice && (
+          <div className="rounded-lg border border-emerald/30 bg-emerald/10 px-3 py-2 text-sm text-emerald">
+            {notice}
+          </div>
+        )}
+        <div className="rounded-xl border border-ink-border bg-ink-raised p-10 text-center">
+          <p className="text-paper/40 text-sm">
+            No split balances yet. Add one above or ask C-137 AI.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {splitForm}
+
       <button
         onClick={() => setShowSettled(!showSettled)}
         className="text-xs text-paper/50 hover:text-paper self-start underline"
