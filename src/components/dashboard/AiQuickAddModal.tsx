@@ -1,11 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, CalendarClock, Check, ChevronDown, ChevronUp, HandCoins, Loader2, Mic, Repeat2, Send, Square, X } from 'lucide-react';
+import { Bot, CalendarClock, Check, ChevronDown, ChevronUp, HandCoins, Loader2, Mic, Repeat2, Send, ShieldCheck, Square, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { createFriendLedgerEntry, createSubscription, createTransaction } from '@/app/actions/transactions';
+import {
+  createFriendLedgerEntry,
+  createSubscription,
+  createTransaction,
+  deleteSubscription,
+  deleteTransaction,
+  updateBudget,
+  updateSubscription,
+  updateTransaction,
+} from '@/app/actions/transactions';
 import { Category, DirectoryUser, Group, TransactionKind } from '@/lib/types';
 import { cn } from '@/lib/utils/format';
 
@@ -53,6 +62,60 @@ type SubscriptionDraft = {
   questions?: string[];
 };
 
+type AiActionPlan =
+  | {
+      type: 'set_budget';
+      title: string;
+      summary: string;
+      monthlyBudget: number | null;
+      confidence: number;
+    }
+  | {
+      type: 'delete_transaction';
+      title: string;
+      summary: string;
+      transactionId: string;
+      confidence: number;
+    }
+  | {
+      type: 'update_transaction';
+      title: string;
+      summary: string;
+      transactionId: string;
+      kind: TransactionKind;
+      groupId?: string | null;
+      categoryId?: string | null;
+      createCategoryName?: string | null;
+      amount: number;
+      description: string;
+      source?: string | null;
+      occurredOn: string;
+      confidence: number;
+    }
+  | {
+      type: 'delete_subscription';
+      title: string;
+      summary: string;
+      subscriptionId: string;
+      confidence: number;
+    }
+  | {
+      type: 'update_subscription';
+      title: string;
+      summary: string;
+      subscriptionId: string;
+      name: string;
+      amount: number;
+      billingDay: number;
+      frequency: 'weekly' | 'monthly';
+      categoryId?: string | null;
+      groupId?: string | null;
+      nextDueOn: string;
+      active: boolean;
+      notes?: string | null;
+      confidence: number;
+    };
+
 type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
@@ -80,6 +143,7 @@ type AiResponse = {
   drafts?: Draft[];
   subscriptionDrafts?: SubscriptionDraft[];
   friendLedgerDrafts?: FriendLedgerDraft[];
+  actionPlans?: AiActionPlan[];
   questions?: string[];
 };
 
@@ -179,6 +243,7 @@ function assistantReplyText(data: {
   drafts?: unknown[];
   subscriptionDrafts?: unknown[];
   friendLedgerDrafts?: unknown[];
+  actionPlans?: unknown[];
 }) {
   const reply = data.reply?.trim();
   const weakReply = !reply || /^(got it|done|ok|okay|sure)[.!]*$/i.test(reply);
@@ -187,12 +252,17 @@ function assistantReplyText(data: {
   const drafts = data.drafts?.length ?? 0;
   const subscriptions = data.subscriptionDrafts?.length ?? 0;
   const friends = data.friendLedgerDrafts?.length ?? 0;
+  const actions = data.actionPlans?.length ?? 0;
   const parts = [
     drafts ? `${drafts} entr${drafts === 1 ? 'y' : 'ies'}` : '',
     subscriptions ? `${subscriptions} subscription${subscriptions === 1 ? '' : 's'}` : '',
     friends ? `${friends} friend balance${friends === 1 ? '' : 's'}` : '',
+    actions ? `${actions} app change${actions === 1 ? '' : 's'}` : '',
   ].filter(Boolean);
 
+  if (actions > 0 && drafts === 0 && subscriptions === 0 && friends === 0) {
+    return `I found ${parts.join(', ')}. Review and apply only if it looks right.`;
+  }
   if (friends > 0 && drafts === 0 && subscriptions === 0) {
     return `I made ${parts.join(', ')}. It will be saved in Splits. Review it, then save.`;
   }
@@ -225,6 +295,7 @@ export function AiQuickAddModal({
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [subscriptionDrafts, setSubscriptionDrafts] = useState<SubscriptionDraft[]>([]);
   const [friendLedgerDrafts, setFriendLedgerDrafts] = useState<FriendLedgerDraft[]>([]);
+  const [actionPlans, setActionPlans] = useState<AiActionPlan[]>([]);
   const [selectedDraft, setSelectedDraft] = useState(0);
   const [selectedSubscriptionDraft, setSelectedSubscriptionDraft] = useState(0);
   const [selectedFriendDraft, setSelectedFriendDraft] = useState(0);
@@ -261,7 +332,7 @@ export function AiQuickAddModal({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages, loading, drafts.length, subscriptionDrafts.length, friendLedgerDrafts.length]);
+  }, [messages, loading, drafts.length, subscriptionDrafts.length, friendLedgerDrafts.length, actionPlans.length]);
 
   function resolveFriendDraft(item: FriendLedgerDraft): FriendLedgerDraft {
     const friendDirectory = directory.filter((person) => person.id !== currentUserId);
@@ -305,6 +376,11 @@ export function AiQuickAddModal({
       })),
       currentSubscriptionDrafts: subscriptionDrafts.slice(0, 5),
       currentFriendLedgerDrafts: friendLedgerDrafts.slice(0, 5),
+      pendingActionPlans: actionPlans.slice(0, 5).map((item) => ({
+        type: item.type,
+        title: item.title,
+        summary: item.summary,
+      })),
       recentMessages: messages.slice(-4).map((item) => ({
         role: item.role,
         text: item.text,
@@ -317,6 +393,7 @@ export function AiQuickAddModal({
     setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
     setSubscriptionDrafts(data.subscriptionDrafts ?? []);
     setFriendLedgerDrafts((data.friendLedgerDrafts ?? []).map(resolveFriendDraft));
+    setActionPlans(data.actionPlans ?? []);
     setFollowUpQuestions((data.questions ?? []).filter(Boolean).slice(0, 3));
     setSelectedDraft(0);
     setSelectedSubscriptionDraft(0);
@@ -383,6 +460,60 @@ export function AiQuickAddModal({
       if (current === indexToRemove) return Math.max(0, current - 1);
       return current;
     });
+  }
+
+  function removeActionPlan(indexToRemove: number) {
+    setActionPlans((current) => current.filter((_, index) => index !== indexToRemove));
+  }
+
+  async function applyActionPlan(indexToApply: number) {
+    const plan = actionPlans[indexToApply];
+    if (!plan || saving) return;
+
+    setError(null);
+    setSaving(true);
+    try {
+      if (plan.type === 'set_budget') {
+        await updateBudget(plan.monthlyBudget);
+      } else if (plan.type === 'delete_transaction') {
+        await deleteTransaction(plan.transactionId);
+      } else if (plan.type === 'update_transaction') {
+        await updateTransaction({
+          id: plan.transactionId,
+          kind: plan.kind,
+          groupId: plan.groupId ?? null,
+          categoryId: plan.categoryId ?? null,
+          createCategoryName: plan.categoryId ? null : plan.createCategoryName ?? null,
+          amount: plan.amount,
+          description: plan.description,
+          source: plan.source ?? undefined,
+          occurredOn: plan.occurredOn,
+        });
+      } else if (plan.type === 'delete_subscription') {
+        await deleteSubscription(plan.subscriptionId);
+      } else if (plan.type === 'update_subscription') {
+        await updateSubscription({
+          id: plan.subscriptionId,
+          name: plan.name,
+          amount: plan.amount,
+          billingDay: plan.billingDay,
+          frequency: plan.frequency,
+          categoryId: plan.categoryId ?? null,
+          groupId: plan.groupId ?? null,
+          nextDueOn: plan.nextDueOn,
+          active: plan.active,
+          notes: plan.notes ?? null,
+        });
+      }
+
+      appendMessage('assistant', `${plan.title} applied.`);
+      removeActionPlan(indexToApply);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not apply that AI change.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function readJsonResponse(response: Response) {
@@ -841,6 +972,57 @@ export function AiQuickAddModal({
                     >
                       {question}
                     </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {actionPlans.length > 0 && (
+              <div className="mb-3 rounded-xl border border-sky/30 bg-sky/10 p-3">
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky/15 text-sky">
+                    <ShieldCheck size={16} />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold">AI wants permission</p>
+                    <p className="text-xs text-paper/45">Apply only the changes that look right.</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {actionPlans.map((plan, index) => (
+                    <div key={`${plan.type}-${index}`} className="rounded-lg border border-ink-border bg-ink p-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-paper">{plan.title}</p>
+                            <span className="rounded-full border border-ink-border px-2 py-0.5 text-[10px] font-semibold uppercase text-paper/40">
+                              {Math.round(plan.confidence * 100)}%
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm leading-relaxed text-paper/60">{plan.summary}</p>
+                        </div>
+                        <div className="flex flex-shrink-0 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => removeActionPlan(index)}
+                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-ink-border text-paper/50 hover:text-clay"
+                            aria-label={`Dismiss ${plan.title}`}
+                            disabled={saving}
+                          >
+                            <X size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void applyActionPlan(index)}
+                            className="flex h-9 items-center gap-1 rounded-lg bg-emerald px-3 text-sm font-semibold text-paper hover:bg-emerald/90 disabled:opacity-50"
+                            disabled={saving}
+                          >
+                            {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                            Apply
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>

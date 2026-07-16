@@ -5,10 +5,13 @@ import {
   getCurrentProfile,
   getDirectory,
   getGroups,
+  getSubscriptions,
   getSplitShares,
+  getTransactions,
 } from '@/lib/data/dashboard';
 import { inferCategoryMatch, suggestCategoryName } from '@/lib/categories/auto';
 import { format } from 'date-fns';
+import { TransactionKind } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -113,6 +116,60 @@ type ParsedSubscriptionDraft = {
   confidence: number;
   questions?: string[];
 };
+
+type ParsedActionPlan =
+  | {
+      type: 'set_budget';
+      title?: string;
+      summary?: string;
+      monthlyBudget: number | null;
+      confidence?: number;
+    }
+  | {
+      type: 'delete_transaction';
+      title?: string;
+      summary?: string;
+      transactionId: string;
+      confidence?: number;
+    }
+  | {
+      type: 'update_transaction';
+      title?: string;
+      summary?: string;
+      transactionId: string;
+      kind?: TransactionKind;
+      amount?: number;
+      description?: string;
+      source?: string | null;
+      occurredOn?: string;
+      categoryId?: string | null;
+      suggestedCategoryName?: string | null;
+      groupId?: string | null;
+      confidence?: number;
+    }
+  | {
+      type: 'delete_subscription';
+      title?: string;
+      summary?: string;
+      subscriptionId: string;
+      confidence?: number;
+    }
+  | {
+      type: 'update_subscription';
+      title?: string;
+      summary?: string;
+      subscriptionId: string;
+      name?: string;
+      amount?: number;
+      billingDay?: number;
+      frequency?: 'weekly' | 'monthly';
+      nextDueOn?: string;
+      categoryId?: string | null;
+      groupId?: string | null;
+      active?: boolean;
+      notes?: string | null;
+      confidence?: number;
+    };
 
 const MODEL_PRICING_USD_PER_1M: Record<string, { input: number; output: number; note?: string }> = {
   'gpt-4o-mini': { input: 0.15, output: 0.60, note: 'Legacy estimate for gpt-4o-mini text tokens.' },
@@ -435,6 +492,21 @@ function resolveCategory(
   };
 }
 
+function isValidActionKind(kind: unknown): kind is TransactionKind {
+  return kind === 'expense' || kind === 'income' || kind === 'investment' || kind === 'transfer';
+}
+
+function safeIsoDate(value: unknown, fallback: string) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return fallback;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? fallback : value;
+}
+
+function clampConfidence(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0.65;
+  return Math.min(Math.max(value, 0), 1);
+}
+
 function isOutstandingQuestion(transcript: string) {
   const text = transcript.trim().toLowerCase();
   const asksForStatus = /\b(who|how much|kitna|kya|show|list|tell|pending|outstanding|balance|balances|summary)\b/.test(text);
@@ -473,6 +545,147 @@ async function outstandingReply(userId: string) {
   }
 
   return parts.join(' ');
+}
+
+function normalizeActionPlans({
+  plans,
+  transactions,
+  subscriptions,
+  categories,
+  today,
+}: {
+  plans: ParsedActionPlan[] | undefined;
+  transactions: Awaited<ReturnType<typeof getTransactions>>;
+  subscriptions: Awaited<ReturnType<typeof getSubscriptions>>;
+  categories: Awaited<ReturnType<typeof getCategories>>;
+  today: string;
+}) {
+  if (!Array.isArray(plans)) return [];
+
+  const transactionById = new Map(transactions.map((transaction) => [transaction.id, transaction]));
+  const subscriptionById = new Map(subscriptions.map((subscription) => [subscription.id, subscription]));
+  const normalized = [];
+
+  for (const plan of plans.slice(0, 5)) {
+    if (!plan || typeof plan !== 'object') continue;
+
+    if (plan.type === 'set_budget') {
+      const monthlyBudget = plan.monthlyBudget === null
+        ? null
+        : typeof plan.monthlyBudget === 'number' && Number.isFinite(plan.monthlyBudget) && plan.monthlyBudget >= 0
+          ? plan.monthlyBudget
+          : null;
+
+      normalized.push({
+        type: 'set_budget' as const,
+        title: plan.title?.trim() || 'Update monthly budget',
+        summary: plan.summary?.trim() || (monthlyBudget === null ? 'Remove the monthly budget.' : `Set monthly budget to ${formatCurrency(monthlyBudget)}.`),
+        monthlyBudget,
+        confidence: clampConfidence(plan.confidence),
+      });
+      continue;
+    }
+
+    if (plan.type === 'delete_transaction') {
+      const transaction = transactionById.get(plan.transactionId);
+      if (!transaction) continue;
+
+      normalized.push({
+        type: 'delete_transaction' as const,
+        title: plan.title?.trim() || 'Delete transaction',
+        summary: plan.summary?.trim() || `Delete "${transaction.description}" for ${formatCurrency(transaction.amount)}.`,
+        transactionId: transaction.id,
+        confidence: clampConfidence(plan.confidence),
+      });
+      continue;
+    }
+
+    if (plan.type === 'update_transaction') {
+      const transaction = transactionById.get(plan.transactionId);
+      if (!transaction || transaction.is_split) continue;
+
+      const kind = isValidActionKind(plan.kind) ? plan.kind : transaction.kind;
+      const amount = typeof plan.amount === 'number' && Number.isFinite(plan.amount) && plan.amount > 0
+        ? plan.amount
+        : transaction.amount;
+      const description = plan.description?.trim() || transaction.description;
+      const source = kind === 'income' || kind === 'transfer'
+        ? plan.source ?? transaction.source ?? null
+        : null;
+      const date = safeIsoDate(plan.occurredOn, transaction.occurred_on || today);
+      const category = kind === 'transfer'
+        ? { categoryId: null, suggestedCategoryName: null }
+        : resolveCategory(
+            kind === 'income' ? 'income' : 'expense',
+            `${description} ${plan.suggestedCategoryName ?? ''}`,
+            plan.categoryId ?? transaction.category_id,
+            plan.suggestedCategoryName,
+            categories
+          );
+
+      normalized.push({
+        type: 'update_transaction' as const,
+        title: plan.title?.trim() || 'Update transaction',
+        summary: plan.summary?.trim() || `Change "${transaction.description}" to "${description}".`,
+        transactionId: transaction.id,
+        kind,
+        groupId: plan.groupId ?? transaction.group_id ?? null,
+        categoryId: category.categoryId,
+        createCategoryName: category.suggestedCategoryName,
+        amount,
+        description,
+        source,
+        occurredOn: date,
+        confidence: clampConfidence(plan.confidence),
+      });
+      continue;
+    }
+
+    if (plan.type === 'delete_subscription') {
+      const subscription = subscriptionById.get(plan.subscriptionId);
+      if (!subscription) continue;
+
+      normalized.push({
+        type: 'delete_subscription' as const,
+        title: plan.title?.trim() || 'Delete subscription',
+        summary: plan.summary?.trim() || `Delete ${subscription.name} from subscriptions.`,
+        subscriptionId: subscription.id,
+        confidence: clampConfidence(plan.confidence),
+      });
+      continue;
+    }
+
+    if (plan.type === 'update_subscription') {
+      const subscription = subscriptionById.get(plan.subscriptionId);
+      if (!subscription) continue;
+
+      const amount = typeof plan.amount === 'number' && Number.isFinite(plan.amount) && plan.amount > 0
+        ? plan.amount
+        : subscription.amount;
+      const billingDay = typeof plan.billingDay === 'number'
+        ? Math.min(Math.max(Math.trunc(plan.billingDay), 1), 31)
+        : subscription.billing_day;
+
+      normalized.push({
+        type: 'update_subscription' as const,
+        title: plan.title?.trim() || 'Update subscription',
+        summary: plan.summary?.trim() || `Update ${subscription.name}.`,
+        subscriptionId: subscription.id,
+        name: plan.name?.trim() || subscription.name,
+        amount,
+        billingDay,
+        frequency: plan.frequency === 'weekly' ? 'weekly' : subscription.frequency,
+        categoryId: plan.categoryId ?? subscription.category_id ?? null,
+        groupId: plan.groupId ?? subscription.group_id ?? null,
+        nextDueOn: safeIsoDate(plan.nextDueOn, subscription.next_due_on || today),
+        active: typeof plan.active === 'boolean' ? plan.active : subscription.active,
+        notes: plan.notes ?? subscription.notes ?? null,
+        confidence: clampConfidence(plan.confidence),
+      });
+    }
+  }
+
+  return normalized;
 }
 
 export async function POST(request: Request) {
@@ -610,11 +823,15 @@ export async function POST(request: Request) {
       return jsonError('AI is not configured. Add OPENAI_API_KEY in Vercel, then redeploy.', 503);
     }
 
-    const [categories, directory, groups] = await Promise.all([
+    const [categories, directory, groups, transactions, subscriptions, splitShares] = await Promise.all([
       getCategories(),
       getDirectory(),
       getGroups(),
+      getTransactions(35),
+      getSubscriptions(),
+      getSplitShares(),
     ]);
+    const balances = computeBalances(splitShares, profile.id).slice(0, 8);
     const findDirectoryPerson = (personId?: string | null, personName?: string | null) => {
       const friendDirectory = directory.filter((person) => person.id !== profile.id);
       if (personId && friendDirectory.some((person) => person.id === personId)) return personId;
@@ -657,12 +874,45 @@ export async function POST(request: Request) {
         emoji: group.emoji,
         memberIds: group.members?.map((member) => member.user_id) ?? [],
       })),
+      currentSettings: {
+        monthlyBudget: profile.monthly_budget,
+      },
+      recentTransactions: transactions.slice(0, 25).map((transaction) => ({
+        id: transaction.id,
+        kind: transaction.kind,
+        amount: transaction.amount,
+        description: transaction.description,
+        source: transaction.source,
+        occurredOn: transaction.occurred_on,
+        categoryId: transaction.category_id,
+        categoryName: transaction.category?.name ?? null,
+        isSplit: transaction.is_split,
+      })),
+      subscriptions: subscriptions.slice(0, 25).map((subscription) => ({
+        id: subscription.id,
+        name: subscription.name,
+        amount: subscription.amount,
+        billingDay: subscription.billing_day,
+        frequency: subscription.frequency,
+        nextDueOn: subscription.next_due_on,
+        active: subscription.active,
+        categoryId: subscription.category_id,
+        categoryName: subscription.category?.name ?? null,
+        notes: subscription.notes,
+      })),
+      splitBalances: balances.map((balance) => ({
+        personId: balance.userId,
+        name: balance.fullName,
+        theyOweYou: balance.theyOweYou,
+        youOweThem: balance.youOweThem,
+        net: balance.net,
+      })),
     };
 
     const completion = await openai.chat.completions.create({
       model: process.env.OPENAI_PARSE_MODEL ?? 'gpt-4o-mini',
       temperature: 0.1,
-      max_tokens: 900,
+      max_tokens: 1100,
       response_format: { type: 'json_object' },
       messages: [
         {
@@ -672,10 +922,15 @@ export async function POST(request: Request) {
             'Correct obvious speech-to-text mistakes silently before drafting.',
             'Prefer the normalized transcript, but use the raw transcript if it preserves names or meaning better.',
             'Return only valid JSON. Never save automatically.',
+            'You may propose changes to existing app data in actionPlans, but the user must approve before anything changes.',
             'Act like a concise friendly chat assistant. Reply normally if the user is chatting, greeting, or asking non-entry questions.',
             'Do not force a transaction draft if there is no clear money event.',
             'Keep reply under 22 words.',
             'Use IDs from the provided context whenever you can match a category, friend, or group.',
+            'For edits/deletes/budget changes, use actionPlans with exact IDs from context.recentTransactions or context.subscriptions.',
+            'Never invent IDs. If the target is unclear, ask a short question instead of making an actionPlan.',
+            'If the user asks to delete, remove, fix, change, rename, recategorize, edit, update, pause, activate, deactivate, or set budget, prefer actionPlans.',
+            'Do not create actionPlans for split transactions unless deleting the whole transaction; split editing is handled separately.',
             'For dates, return YYYY-MM-DD. Resolve today/yesterday using context.today.',
             'For equal splits, peopleIds should include only other people, not the current user.',
             'For custom splits, customAmounts are amounts owed by each other person.',
@@ -757,6 +1012,30 @@ export async function POST(request: Request) {
                   questions: ['short confirmation questions if needed'],
                 },
               ],
+              actionPlans: [
+                {
+                  type: 'set_budget | delete_transaction | update_transaction | delete_subscription | update_subscription',
+                  title: 'short permission title',
+                  summary: 'what will change if user approves',
+                  monthlyBudget: 'number or null, only for set_budget',
+                  transactionId: 'existing transaction id for transaction actions',
+                  subscriptionId: 'existing subscription id for subscription actions',
+                  kind: 'expense | income | investment | transfer, only for update_transaction',
+                  amount: 'number, for update actions',
+                  description: 'string, for update_transaction',
+                  source: 'string or null, for update_transaction',
+                  occurredOn: 'YYYY-MM-DD, for update_transaction',
+                  categoryId: 'matching category id or null',
+                  suggestedCategoryName: 'new category name when no category fits',
+                  name: 'subscription name for update_subscription',
+                  billingDay: '1 to 31 for update_subscription',
+                  frequency: 'weekly | monthly for update_subscription',
+                  nextDueOn: 'YYYY-MM-DD for update_subscription',
+                  active: 'boolean for update_subscription',
+                  notes: 'string or null for update_subscription',
+                  confidence: '0 to 1',
+                },
+              ],
             },
           }),
         },
@@ -784,6 +1063,7 @@ export async function POST(request: Request) {
       drafts?: ParsedDraft[];
       subscriptionDrafts?: ParsedSubscriptionDraft[];
       friendLedgerDrafts?: ParsedFriendLedgerDraft[];
+      actionPlans?: ParsedActionPlan[];
     };
     const rawDrafts = parsed.drafts ?? [];
     const friendLedgerFallbacks = rawDrafts
@@ -887,6 +1167,13 @@ export async function POST(request: Request) {
       }),
       ...subscriptionFallbacks,
     ];
+    const actionPlans = normalizeActionPlans({
+      plans: parsed.actionPlans,
+      transactions,
+      subscriptions,
+      categories,
+      today,
+    });
     const reply = humanDraftReply({
       reply: parsed.reply,
       draftsCount: drafts.length,
@@ -898,14 +1185,16 @@ export async function POST(request: Request) {
       ...drafts.flatMap((draft) => draft.questions ?? []),
       ...subscriptionDrafts.flatMap((draft) => draft.questions ?? []),
       ...friendLedgerDrafts.flatMap((draft) => draft.questions ?? []),
-      ...(drafts.length === 0 && subscriptionDrafts.length === 0 && friendLedgerDrafts.length === 0 ? fallbackQuestions(normalizedTranscript) : []),
+      ...(drafts.length === 0 && subscriptionDrafts.length === 0 && friendLedgerDrafts.length === 0 && actionPlans.length === 0 ? fallbackQuestions(normalizedTranscript) : []),
     ]
       .map((question) => question.trim())
       .filter(Boolean)
       .filter((question, index, all) => all.indexOf(question) === index)
       .slice(0, 3);
-    const responseReply = questions.length > 0 && drafts.length === 0 && subscriptionDrafts.length === 0 && friendLedgerDrafts.length === 0
+    const responseReply = questions.length > 0 && drafts.length === 0 && subscriptionDrafts.length === 0 && friendLedgerDrafts.length === 0 && actionPlans.length === 0
       ? 'I need one detail before I can make the draft.'
+      : actionPlans.length > 0 && drafts.length === 0 && subscriptionDrafts.length === 0 && friendLedgerDrafts.length === 0
+        ? `I found ${actionPlans.length} change${actionPlans.length === 1 ? '' : 's'}. Review and apply.`
       : reply;
 
     return Response.json({
@@ -926,6 +1215,7 @@ export async function POST(request: Request) {
       drafts,
       subscriptionDrafts,
       friendLedgerDrafts,
+      actionPlans,
       questions,
     });
   } catch (error) {
