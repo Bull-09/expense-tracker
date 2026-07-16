@@ -390,10 +390,18 @@ export function AiQuickAddModal({
 
   function applyAiResponse(data: AiResponse) {
     appendMessage('assistant', assistantReplyText(data), data.usage ?? null);
-    setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
-    setSubscriptionDrafts(data.subscriptionDrafts ?? []);
-    setFriendLedgerDrafts((data.friendLedgerDrafts ?? []).map(resolveFriendDraft));
-    setActionPlans(data.actionPlans ?? []);
+    const hasWork =
+      (data.drafts?.length ?? 0) > 0
+      || (data.subscriptionDrafts?.length ?? 0) > 0
+      || (data.friendLedgerDrafts?.length ?? 0) > 0
+      || (data.actionPlans?.length ?? 0) > 0;
+
+    if (hasWork) {
+      setDrafts((data.drafts ?? []).map(normalizeIncomingDraft));
+      setSubscriptionDrafts(data.subscriptionDrafts ?? []);
+      setFriendLedgerDrafts((data.friendLedgerDrafts ?? []).map(resolveFriendDraft));
+      setActionPlans(data.actionPlans ?? []);
+    }
     setFollowUpQuestions((data.questions ?? []).filter(Boolean).slice(0, 3));
     setSelectedDraft(0);
     setSelectedSubscriptionDraft(0);
@@ -966,12 +974,18 @@ export function AiQuickAddModal({
                 <p className="text-xs font-semibold uppercase tracking-wide text-gold">Needs one detail</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {followUpQuestions.map((question) => (
-                    <span
+                    <button
                       key={question}
+                      type="button"
+                      onClick={() => {
+                        setOpen(true);
+                        setMessage((current) => current || '');
+                        textareaRef.current?.focus();
+                      }}
                       className="rounded-full border border-gold/30 bg-ink/70 px-3 py-1.5 text-xs font-medium text-paper/75"
                     >
                       {question}
-                    </span>
+                    </button>
                   ))}
                 </div>
               </div>

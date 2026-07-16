@@ -171,6 +171,13 @@ type ParsedActionPlan =
       confidence?: number;
     };
 
+type ClientStateSnapshot = {
+  currentDrafts: ParsedDraft[];
+  currentSubscriptionDrafts: ParsedSubscriptionDraft[];
+  currentFriendLedgerDrafts: ParsedFriendLedgerDraft[];
+  recentMessages: Array<{ role?: string; text?: string }>;
+};
+
 const MODEL_PRICING_USD_PER_1M: Record<string, { input: number; output: number; note?: string }> = {
   'gpt-4o-mini': { input: 0.15, output: 0.60, note: 'Legacy estimate for gpt-4o-mini text tokens.' },
   'gpt-5.4': { input: 2.50, output: 15.00 },
@@ -209,6 +216,29 @@ function extractJson(content: string) {
   const trimmed = content.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   return JSON.parse(fenced?.[1] ?? trimmed);
+}
+
+function cleanArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value.filter((item): item is T => Boolean(item) && typeof item === 'object') : [];
+}
+
+function parseClientStateSnapshot(value: unknown): ClientStateSnapshot {
+  if (!value || typeof value !== 'object') {
+    return {
+      currentDrafts: [],
+      currentSubscriptionDrafts: [],
+      currentFriendLedgerDrafts: [],
+      recentMessages: [],
+    };
+  }
+
+  const state = value as Record<string, unknown>;
+  return {
+    currentDrafts: cleanArray<ParsedDraft>(state.currentDrafts).slice(0, 8),
+    currentSubscriptionDrafts: cleanArray<ParsedSubscriptionDraft>(state.currentSubscriptionDrafts).slice(0, 5),
+    currentFriendLedgerDrafts: cleanArray<ParsedFriendLedgerDraft>(state.currentFriendLedgerDrafts).slice(0, 5),
+    recentMessages: cleanArray<{ role?: string; text?: string }>(state.recentMessages).slice(-6),
+  };
 }
 
 function normalizeTranscript(input: string) {
@@ -333,6 +363,100 @@ function cleanPersonName(value: string) {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function answerLooksLikeOnlyName(transcript: string) {
+  return /^[a-z][a-z\s.'-]{1,40}$/i.test(transcript.trim())
+    && !/\b(spent|paid|got|received|borrowed|lent|gave|subscription|income|expense|split|delete|update|change|budget)\b/i.test(transcript);
+}
+
+function answerLooksLikeOnlyFrequency(transcript: string) {
+  return /\b(weekly|every week|monthly|every month)\b/i.test(transcript)
+    && !/\d/.test(transcript);
+}
+
+function applyPendingClarificationFallback({
+  clientState,
+  transcript,
+  today,
+}: {
+  clientState: ClientStateSnapshot;
+  transcript: string;
+  today: string;
+}) {
+  const amount = moneyAmountFromText(transcript);
+  const date = dateFromText(transcript, today);
+  const nameAnswer = answerLooksLikeOnlyName(transcript) ? cleanPersonName(transcript) : '';
+  const frequency: 'weekly' | 'monthly' | null = answerLooksLikeOnlyFrequency(transcript)
+    ? /\b(weekly|every week)\b/i.test(transcript) ? 'weekly' : 'monthly'
+    : null;
+
+  if (clientState.currentFriendLedgerDrafts.length === 1) {
+    const pending = clientState.currentFriendLedgerDrafts[0];
+    const needsAmount = !pending.amount || pending.amount <= 0;
+    const needsPerson = !pending.personId && !pending.personName;
+
+    if ((needsAmount && amount) || (needsPerson && nameAnswer) || hasExplicitDateClue(transcript)) {
+      return {
+        reply: 'Filled that into the friend balance. Review and save.',
+        drafts: [],
+        subscriptionDrafts: [],
+        friendLedgerDrafts: [{
+          ...pending,
+          amount: needsAmount && amount ? amount : pending.amount,
+          personName: needsPerson && nameAnswer ? nameAnswer : pending.personName ?? null,
+          occurredOn: hasExplicitDateClue(transcript) ? date : pending.occurredOn,
+          confidence: Math.max(pending.confidence ?? 0.5, 0.82),
+          questions: [],
+        }],
+      };
+    }
+  }
+
+  if (clientState.currentSubscriptionDrafts.length === 1) {
+    const pending = clientState.currentSubscriptionDrafts[0];
+    const needsAmount = !pending.amount || pending.amount <= 0;
+    const needsFrequency = !pending.frequency;
+
+    if ((needsAmount && amount) || (needsFrequency && frequency) || hasExplicitDateClue(transcript)) {
+      return {
+        reply: 'Filled that into the subscription. Review and save.',
+        drafts: [],
+        subscriptionDrafts: [{
+          ...pending,
+          amount: needsAmount && amount ? amount : pending.amount,
+          frequency: frequency ?? pending.frequency ?? 'monthly',
+          nextDueOn: hasExplicitDateClue(transcript) ? date : pending.nextDueOn ?? today,
+          billingDay: pending.billingDay ?? new Date(today).getDate(),
+          confidence: Math.max(pending.confidence ?? 0.5, 0.82),
+          questions: [],
+        }],
+        friendLedgerDrafts: [],
+      };
+    }
+  }
+
+  if (clientState.currentDrafts.length === 1) {
+    const pending = clientState.currentDrafts[0];
+    const needsAmount = !pending.amount || pending.amount <= 0;
+
+    if ((needsAmount && amount) || hasExplicitDateClue(transcript)) {
+      return {
+        reply: 'Filled that into the draft. Review and save.',
+        drafts: [{
+          ...pending,
+          amount: needsAmount && amount ? amount : pending.amount,
+          occurredOn: hasExplicitDateClue(transcript) ? date : pending.occurredOn,
+          confidence: Math.max(pending.confidence ?? 0.5, 0.82),
+          questions: [],
+        }],
+        subscriptionDrafts: [],
+        friendLedgerDrafts: [],
+      };
+    }
+  }
+
+  return null;
 }
 
 function friendLedgerFallbackDraft(rawTranscript: string, normalizedTranscript: string, today: string): ParsedFriendLedgerDraft | null {
@@ -762,6 +886,7 @@ export async function POST(request: Request) {
     const correctedTranscript = audio ? cleanVoiceTranscript(transcript) : transcript;
     const normalizedTranscript = normalizeTranscript(correctedTranscript);
     const today = format(new Date(), 'yyyy-MM-dd');
+    const clientStateSnapshot = parseClientStateSnapshot(clientState);
 
     const deterministicFriendDraft = friendLedgerFallbackDraft(correctedTranscript, normalizedTranscript, today);
     if (deterministicFriendDraft && !apiKey) {
@@ -773,8 +898,26 @@ export async function POST(request: Request) {
         drafts: [],
         subscriptionDrafts: [],
         friendLedgerDrafts: [deterministicFriendDraft],
+        actionPlans: [],
         questions: [],
         usage: null,
+      });
+    }
+
+    const pendingClarification = applyPendingClarificationFallback({
+      clientState: clientStateSnapshot,
+      transcript: normalizedTranscript,
+      today,
+    });
+    if (pendingClarification) {
+      return Response.json({
+        transcript,
+        correctedTranscript,
+        normalizedTranscript,
+        actionPlans: [],
+        questions: [],
+        usage: null,
+        ...pendingClarification,
       });
     }
 
@@ -788,6 +931,7 @@ export async function POST(request: Request) {
         drafts: [],
         subscriptionDrafts: [],
         friendLedgerDrafts: [],
+        actionPlans: [],
         questions: [],
       });
     }
@@ -801,6 +945,7 @@ export async function POST(request: Request) {
         drafts: [],
         subscriptionDrafts: [],
         friendLedgerDrafts: [],
+        actionPlans: [],
         questions: [],
       });
     }
@@ -815,6 +960,7 @@ export async function POST(request: Request) {
           drafts: [],
           subscriptionDrafts: [],
           friendLedgerDrafts: [deterministicFriendDraft],
+          actionPlans: [],
           questions: [],
           usage: null,
         });
@@ -851,6 +997,18 @@ export async function POST(request: Request) {
 
     const context = {
       today,
+      productModel: {
+        app: 'C-137 Capital',
+        purpose: 'A lazy-first personal money tracker with expenses, income, investments, subscriptions, split balances, and permissioned AI edits.',
+        ledgerRules: [
+          'Expense means money spent with a shop, vendor, app, bill, or personal purchase.',
+          'Income means money earned, refunded, gifted, salary, client payment, or money received that increases cash and is not a loan.',
+          'Investment means money moved into savings, stocks, crypto, mutual funds, SIP, FD, or long-term assets.',
+          'Transfer/friend balance means borrowed money, lent money, someone owes me, I owe someone, or friend settlement. It belongs in Splits, not income or expense.',
+          'Subscription means recurring bill such as Netflix, Spotify, gym, rent, EMI, software, cloud, app, every week, or every month.',
+          'AI can prepare drafts and propose permission cards, but the user confirms by saving or applying.',
+        ],
+      },
       currentUser: {
         id: profile.id,
         name: profile.full_name,
@@ -919,14 +1077,17 @@ export async function POST(request: Request) {
           role: 'system',
           content: [
             'You convert casual Indian English or Hinglish money notes into transaction drafts for an expense tracker.',
+            'You are the money copilot for C-137 Capital. Think like a careful human assistant who understands Indian daily money talk.',
             'Correct obvious speech-to-text mistakes silently before drafting.',
             'Prefer the normalized transcript, but use the raw transcript if it preserves names or meaning better.',
             'Return only valid JSON. Never save automatically.',
             'You may propose changes to existing app data in actionPlans, but the user must approve before anything changes.',
-            'Act like a concise friendly chat assistant. Reply normally if the user is chatting, greeting, or asking non-entry questions.',
+            'Act like a concise friendly chat assistant. Reply normally if the user is chatting, greeting, or asking non-entry questions, but be useful and specific.',
             'Do not force a transaction draft if there is no clear money event.',
             'Keep reply under 22 words.',
+            'Your job is not to say "got it". Your job is to infer the correct ledger bucket, make the best draft, and ask only the one missing detail if blocked.',
             'Use IDs from the provided context whenever you can match a category, friend, or group.',
+            'Read context.productModel. Follow those ledger rules over casual wording.',
             'For edits/deletes/budget changes, use actionPlans with exact IDs from context.recentTransactions or context.subscriptions.',
             'Never invent IDs. If the target is unclear, ask a short question instead of making an actionPlan.',
             'If the user asks to delete, remove, fix, change, rename, recategorize, edit, update, pause, activate, deactivate, or set budget, prefer actionPlans.',
@@ -938,20 +1099,27 @@ export async function POST(request: Request) {
             'One long voice note can contain many entries. Split every clear expense, income, investment, and subscription into its own draft.',
             'Use commas, "and", "also", "then", pauses, or sentence breaks as hints for separate drafts.',
             'Example: "spent 100 chai and 250 cab and got 5000 from dad" means two expense drafts and one income draft.',
+            'If user says "I gave Rahul 2k", "Rahul owes me 2k", "lent Rahul 2k", or "paid for Rahul", make friendLedgerDrafts direction lent.',
+            'If user says "Rahul gave me 2k", "I took from Rahul", "borrowed from Rahul", or "I owe Rahul", make friendLedgerDrafts direction borrowed.',
+            'If user says "received from Rahul for previous split" and it settles money, do not make income; propose a split/balance response or ask which balance to settle.',
             'Friend money is not vendor spend. If user says borrowed/took money from a friend, return friendLedgerDrafts direction borrowed.',
             'If user says lent/gave/paid for a friend and they should return it, return friendLedgerDrafts direction lent.',
             'Phrases like "took money from Rahul", "take money from Rahul", "borrowed from Rahul" mean borrowed.',
             'Use friendLedgerDrafts only when a friend/person is involved in lending or borrowing, not for shops, vendors, salary, or refunds.',
             'For vendor/shop payments, return normal expense drafts and keep the vendor or merchant name in description for history search.',
+            'Do not ask category if you can infer it. Use existing category IDs first, then suggestedCategoryName if no existing category fits.',
             'If no category ID matches well, suggest a short category name in suggestedCategoryName.',
             'If the user mentions subscriptions, recurring payments, renewals, EMI, rent, membership, every week, or every month, return subscriptionDrafts.',
             'Words like "Netflix subscription", "Spotify subscription", "Prime subscription", "ChatGPT subscription", or "iCloud subscription" are subscriptionDrafts even if the user does not say monthly.',
             'Do not also create a normal expense draft for a subscription unless the user clearly says it was paid today.',
             'For subscription frequency, use weekly for every week/weekly and monthly for every month/monthly. Default to monthly.',
             'For subscription billingDay, infer day of month if mentioned, otherwise use today day.',
-            'If amount, person, date, category, subscription frequency, or entry type is missing, ask one short question in top-level questions.',
+            'Default date to context.today when no date is said. Do not ask date unless the user implies a past/future event without enough date detail.',
+            'If amount or person is missing, ask one short question in top-level questions. Do not ask unnecessary questions.',
             'If the user is clarifying a previous draft, reply as a clarification and return the corrected draft shape.',
             'Use clientState.currentDrafts, currentSubscriptionDrafts, and currentFriendLedgerDrafts when the user says words like this, that, change, make it, correct it, or actually.',
+            'If the user answers a previous question with only a name, amount, date, or frequency, update the pending draft from clientState instead of starting a new unrelated draft.',
+            'If user asks about balances, outstanding amounts, what people owe, subscriptions, category spend, or recent entries, answer from context instead of making drafts.',
             'If unsure, keep confidence lower and add short questions.',
           ].join('\n'),
         },
@@ -962,7 +1130,7 @@ export async function POST(request: Request) {
             rawTranscript: transcript,
             correctedTranscript,
             transcript: normalizedTranscript,
-            clientState,
+            clientState: clientStateSnapshot,
             outputShape: {
               reply: 'short friendly assistant reply',
               questions: ['1-2 short follow-up questions if details are missing'],
