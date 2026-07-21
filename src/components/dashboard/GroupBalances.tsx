@@ -7,6 +7,7 @@ import { settleExpenseSplits } from '@/app/actions/transactions';
 import { simplifyDebts, upiPaymentLink, whatsappReminderLink } from '@/lib/splits/simplify';
 import type { ExpenseSplit, Group, GroupMember } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
+import { BalanceShareButton } from '@/components/dashboard/BalanceShareButton';
 
 function memberName(member?: GroupMember) {
   return member?.profile?.full_name ?? member?.contact_name ?? 'Member';
@@ -54,6 +55,7 @@ export function GroupBalances({ groups, splits, currentUserId }: { groups: Group
               {currentOwes && (upiHref ? <a href={upiHref} className="flex items-center gap-1 rounded-lg bg-mint px-2.5 py-1.5 text-xs font-bold text-ink"><Smartphone size={14} /> Pay via UPI</a> : group.owner_id === currentUserId ? <Link href="/dashboard/groups" className="text-xs text-sand">Add {memberName(creditor)}&apos;s UPI ID</Link> : <span className="text-xs text-sand">{memberName(creditor)} needs to set a UPI ID</span>)}
               {currentIsOwed && (whatsappHref ? <a href={whatsappHref} target="_blank" rel="noreferrer" className="flex items-center gap-1 rounded-lg border border-mint/30 px-2.5 py-1.5 text-xs font-semibold text-mint"><MessageCircle size={14} /> Remind</a> : <button disabled title="Add their phone number in the group to enable WhatsApp reminders." className="flex items-center gap-1 rounded-lg border border-ink-border px-2.5 py-1.5 text-xs text-paper/25"><MessageCircle size={14} /> Remind</button>)}
               {(currentOwes || currentIsOwed) && <button disabled={pending || !directShareIds.length} title={directShareIds.length ? 'Mark matching split shares settled' : 'This simplified payment nets multiple indirect shares and must be settled from expense history.'} onClick={() => startTransition(() => settleExpenseSplits(directShareIds))} className="flex items-center gap-1 rounded-lg border border-ink-border px-2.5 py-1.5 text-xs font-semibold text-paper/55 disabled:opacity-30"><CheckCircle2 size={14} /> Mark settled</button>}
+              {(currentOwes || currentIsOwed) && <BalanceShareButton counterpartyName={currentOwes ? memberName(creditor) : memberName(debtor)} direction={currentOwes ? 'you_owe' : 'owes_you'} amount={debt.amount} context={group.name} phone={currentOwes ? creditor?.phone : debtor?.phone} />}
             </div>
           </div>;
         })}

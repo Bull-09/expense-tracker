@@ -29,13 +29,14 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/signup') ||
     request.nextUrl.pathname.startsWith('/forgot-password') ||
     request.nextUrl.pathname.startsWith('/reset-password');
+  const isPublicShareRoute = request.nextUrl.pathname.startsWith('/share/balance/');
   const shouldRedirectSignedInUser = request.nextUrl.pathname.startsWith('/login') ||
     request.nextUrl.pathname.startsWith('/signup') ||
     request.nextUrl.pathname.startsWith('/forgot-password');
   const isPublicAsset = request.nextUrl.pathname.startsWith('/_next') ||
     request.nextUrl.pathname.startsWith('/favicon');
 
-  if (!user && !isPublicAuthRoute && !isPublicAsset) {
+  if (!user && !isPublicAuthRoute && !isPublicShareRoute && !isPublicAsset) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

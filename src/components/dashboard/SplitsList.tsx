@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils/format';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { whatsappReminderLink } from '@/lib/splits/simplify';
+import { BalanceShareButton } from '@/components/dashboard/BalanceShareButton';
 
 export function SplitsList({
   splitShares,
@@ -253,7 +254,7 @@ export function SplitsList({
           const reminderHref = contact?.phone ? whatsappReminderLink(contact.phone, s.amount, s.transaction?.description || 'a shared expense') : null;
 
           return (
-            <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
+            <div key={s.id} className="flex items-start justify-between gap-3 px-4 py-3.5 sm:items-center">
               <div className="flex items-center gap-3 min-w-0">
                 <div
                   className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0"
@@ -272,12 +273,13 @@ export function SplitsList({
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="flex max-w-[58%] flex-shrink-0 flex-wrap items-center justify-end gap-2 sm:max-w-none">
                 <span className={cn('font-ledger text-sm font-semibold', youArePayer ? 'text-mint' : 'text-peach', s.settled && 'opacity-40 line-through')}>
                   {formatCurrency(s.amount)}
                 </span>
                 {!s.settled && (
                   <>
+                    <BalanceShareButton counterpartyName={otherPerson?.full_name ?? 'Friend'} direction={youArePayer ? 'owes_you' : 'you_owe'} amount={s.amount} context={s.transaction?.description || 'a shared expense'} phone={contact?.phone} />
                     {youArePayer && (
                       <a
                         href={reminderHref ?? undefined}
