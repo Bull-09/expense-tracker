@@ -82,6 +82,8 @@ export function CaptureSheet({
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
+  const [displayedTranscript, setDisplayedTranscript] = useState('');
+  const [entityRevealStage, setEntityRevealStage] = useState(0);
   const [voiceDraftReady, setVoiceDraftReady] = useState(false);
   const [resolution, setResolution] = useState<'local' | 'llm' | null>(null);
   const [countdown, setCountdown] = useState(3);
@@ -169,6 +171,8 @@ export function CaptureSheet({
     setError(null);
     setTranscript('');
     setInterimTranscript('');
+    setDisplayedTranscript('');
+    setEntityRevealStage(0);
     setVoiceDraftReady(false);
     setResolution(null);
     setCountdown(3);
@@ -263,6 +267,10 @@ export function CaptureSheet({
     setDescription(draft.description);
     setResolution(method);
     setVoiceDraftReady(true);
+    setEntityRevealStage(0);
+    window.setTimeout(() => setEntityRevealStage(1), 40);
+    window.setTimeout(() => setEntityRevealStage(2), 180);
+    window.setTimeout(() => setEntityRevealStage(3), 320);
     setCountdown(3);
     const resolutionLog = { source: 'voice', method, confidence: draft.confidence, at: new Date().toISOString() };
     console.info('[capture-resolution]', resolutionLog);
@@ -297,9 +305,23 @@ export function CaptureSheet({
       if (finalText.trim()) void resolveTranscript(finalText.trim()).catch((reason) => setError(reason instanceof Error ? reason.message : 'Could not parse that voice note.'));
     };
     recognitionRef.current = recognition;
-    setTranscript(''); setVoiceDraftReady(false); setError(null); setListening(true);
+    setTranscript(''); setDisplayedTranscript(''); setEntityRevealStage(0); setVoiceDraftReady(false); setError(null); setListening(true);
     recognition.start();
   }
+
+  useEffect(() => {
+    const target = `${transcript}${interimTranscript ? `${transcript ? ' ' : ''}${interimTranscript}` : ''}`.trim();
+    if (!target) return;
+    if (displayedTranscript && !target.startsWith(displayedTranscript)) {
+      const correction = window.setTimeout(() => setDisplayedTranscript(target.slice(0, Math.min(target.length, displayedTranscript.length))), 0);
+      return () => window.clearTimeout(correction);
+    }
+    if (displayedTranscript.length >= target.length) return;
+    const timeout = window.setTimeout(() => {
+      setDisplayedTranscript(target.slice(0, Math.min(target.length, displayedTranscript.length + 2)));
+    }, 24);
+    return () => window.clearTimeout(timeout);
+  }, [displayedTranscript, interimTranscript, transcript]);
 
   const toggleFriend = useCallback((id: string) => {
     setSelectedGroupId('');
@@ -500,14 +522,14 @@ export function CaptureSheet({
 
           {mode === 'voice' && !voiceDraftReady && (
             <div className="flex min-h-64 flex-col items-center justify-center py-6 text-center">
-              <div className="mb-5 flex h-16 items-end justify-center gap-1" aria-hidden="true">
-                {[18, 34, 52, 40, 60, 30, 46, 22].map((height, index) => <span key={index} className={cn('w-1.5 rounded-full bg-mint transition-all', listening && 'animate-pulse')} style={{ height: listening ? `${height}px` : '10px', animationDelay: `${index * 70}ms` }} />)}
+              <div className="mb-5 flex h-16 items-center justify-center gap-1" aria-hidden="true">
+                {[.38, .7, 1, .62, .88, .48, .78, .56, .92, .42].map((scale, index) => <span key={index} className={cn('h-14 w-1.5 origin-center rounded-full bg-mint', listening ? 'voice-wave-bar' : 'scale-y-[.16] opacity-45')} style={{ '--voice-scale': scale, animationDelay: `${index * 80}ms` } as React.CSSProperties} />)}
               </div>
-              <button type="button" onClick={toggleListening} className={cn('flex h-20 w-20 items-center justify-center rounded-full border-4 shadow-xl transition-transform active:scale-95', listening ? 'border-peach/40 bg-peach text-ink' : 'border-mint/30 bg-mint text-ink')} aria-label={listening ? 'Stop listening' : 'Start voice capture'}>
+              <button type="button" onClick={toggleListening} className={cn('flex h-20 w-20 items-center justify-center rounded-full border-4 shadow-xl transition-transform active:scale-95', listening ? 'mic-listening border-mint/55 bg-mint text-ink' : 'border-mint/30 bg-mint text-ink')} aria-label={listening ? 'Stop listening' : 'Start voice capture'}>
                 {listening ? <Square size={25} fill="currentColor" /> : <Mic size={30} />}
               </button>
               <p className="mt-4 font-semibold">{listening ? 'Listening… tap to stop' : 'Tap to start'}</p>
-              <p className="mt-1 max-w-xs text-sm text-paper/45">{interimTranscript || transcript || 'Try “Spent 450 at Swiggy”'}</p>
+              <p className="mt-1 min-h-10 max-w-xs text-sm text-paper/55" aria-live="polite">{displayedTranscript || 'Try “Spent 450 at Swiggy”'}{listening && displayedTranscript && <span className="ml-0.5 animate-pulse text-mint">|</span>}</p>
               {!speechAvailable && <button type="button" onClick={() => setMode('keypad')} className="mt-4 text-sm font-semibold text-mint">Use keypad instead</button>}
             </div>
           )}
@@ -526,9 +548,16 @@ export function CaptureSheet({
 
           {(mode === 'keypad' || voiceDraftReady) && <>
           {(mode === 'voice' || mode === 'scan') && voiceDraftReady && (
-            <div className="mb-2 flex items-center justify-between rounded-xl border border-mint/25 bg-mint/10 px-3 py-2 text-xs text-mint">
-              <span>{mode === 'scan' ? 'Extracted with vision' : resolution === 'local' ? 'Resolved locally · zero AI tokens' : 'Transcript refined with AI'} — editable draft</span>
-              {numericAmount > 0 && categoryId && <span className="font-ledger font-bold">Saving in {countdown}s</span>}
+            <div className="mb-3 rounded-xl border border-mint/25 bg-mint/10 px-3 py-2.5 text-xs text-mint">
+              <div className="flex items-center justify-between gap-3">
+                <span>{mode === 'scan' ? 'Extracted with vision' : resolution === 'local' ? 'Resolved locally · zero AI tokens' : 'Transcript refined with AI'} — editable draft</span>
+                {numericAmount > 0 && categoryId && <span className="flex shrink-0 items-center gap-1.5 font-ledger font-bold"><svg key={`${editVersion}-${categoryId}-${numericAmount}`} viewBox="0 0 44 44" className="h-7 w-7 -rotate-90" aria-hidden="true"><circle cx="22" cy="22" r="17" fill="none" stroke="var(--ink-border)" strokeWidth="4" /><circle cx="22" cy="22" r="17" fill="none" stroke="var(--mint)" strokeWidth="4" strokeLinecap="round" pathLength="100" strokeDasharray="100" className="countdown-ring" /></svg>{countdown}s</span>}
+              </div>
+              {mode === 'voice' && <div className="mt-2 flex flex-wrap gap-1.5">
+                {entityRevealStage >= 1 && numericAmount > 0 && <span className="entity-chip rounded-full bg-ink px-2.5 py-1 font-ledger font-bold text-paper">₹{numericAmount}</span>}
+                {entityRevealStage >= 2 && selectedCategory && <span className="entity-chip rounded-full bg-ink px-2.5 py-1 text-paper">{selectedCategory.name}</span>}
+                {entityRevealStage >= 3 && <span className="entity-chip rounded-full bg-ink px-2.5 py-1 text-paper">{selectedFriends.length || selectedMemberIds.length ? `${selectedFriends.length + selectedMemberIds.length} split` : 'No split'}</span>}
+              </div>}
             </div>
           )}
           {mode === 'scan' && receiptPreview && <Image unoptimized width={360} height={240} src={receiptPreview} alt="Receipt being reviewed" className="mx-auto mb-3 max-h-48 w-auto rounded-xl border border-ink-border object-contain" />}

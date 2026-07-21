@@ -20,7 +20,7 @@ export function GroupBalances({ groups, splits, currentUserId }: { groups: Group
   const [pending, startTransition] = useTransition();
   if (!groups.length) return <div className="rounded-2xl border border-dashed border-ink-border bg-ink-raised p-8 text-center"><p className="font-semibold">No split groups yet</p><Link href="/dashboard/groups" className="mt-2 inline-flex text-sm font-semibold text-mint">Create a group</Link></div>;
 
-  return <div className="grid gap-4 lg:grid-cols-2">{groups.map((group) => {
+  return <div className="grid gap-4">{groups.map((group) => {
     const groupSplits = splits.filter((split) => split.transaction?.group_id === group.id);
     const unsettled = groupSplits.filter((split) => !split.is_settled);
     const members = group.members ?? [];

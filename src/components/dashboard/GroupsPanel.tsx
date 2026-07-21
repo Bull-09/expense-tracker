@@ -109,16 +109,17 @@ export function GroupsPanel({
                   >
                     <span
                       className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold"
-                      style={{ backgroundColor: member.profile?.avatar_color ?? '#3F7A5C' }}
+                      style={{ backgroundColor: member.profile?.avatar_color ?? 'var(--teal)' }}
                     >
                       {(member.profile?.full_name ?? member.contact_name ?? '?').charAt(0).toUpperCase()}
                     </span>
                     <span className="max-w-32 truncate">{member.profile?.full_name ?? member.contact_name ?? 'Member'}</span>
+                    {!member.user_id && !member.phone && <Phone size={12} className="text-peach" aria-label="Phone missing" />}
+                    {!member.user_id && !member.upi_id && <WalletCards size={12} className="text-sand" aria-label="UPI ID missing" />}
                   </div>
                 ))}
               </div>
-              <div className="mt-4 flex items-center justify-between border-t border-ink-border pt-3">
-                <div className="flex gap-2 text-paper/35">{group.members?.filter((member) => !member.user_id).map((member) => <span key={member.id} className="flex items-center gap-1 text-[11px]" title={`${member.contact_name}: ${member.phone ? 'phone saved' : 'phone missing'}, ${member.upi_id ? 'UPI saved' : 'UPI missing'}`}><Phone size={12} className={member.phone ? 'text-mint' : 'text-peach'} /><WalletCards size={12} className={member.upi_id ? 'text-mint' : 'text-peach'} /></span>)}</div>
+              <div className="mt-4 flex items-center justify-end border-t border-ink-border pt-3">
                 <Link href={`/dashboard/splits#group-${group.id}`} className="text-xs font-bold text-mint">View balances →</Link>
               </div>
               {group.owner_id === currentUserId && group.members?.some((member) => !member.user_id) && <details className="mt-3"><summary className="cursor-pointer text-xs font-semibold text-paper/40">Edit contact payment details</summary>{group.members.filter((member) => !member.user_id).map((member) => <div key={member.id} className="mt-2 rounded-xl border border-ink-border bg-ink p-3"><p className="text-xs font-semibold">{member.contact_name}</p><ContactMethodEditor member={member} /></div>)}</details>}

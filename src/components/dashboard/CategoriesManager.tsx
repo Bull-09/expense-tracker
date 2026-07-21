@@ -3,8 +3,8 @@
 import { useState, useTransition } from 'react';
 import { ArrowDown, ArrowUp, Briefcase, Car, Circle, Eye, EyeOff, Film, HeartPulse, Home, Pencil, Plane, Plus, Receipt, ShoppingBag, Trash2, Utensils, X } from 'lucide-react';
 import { deleteCategory, reorderCategory, saveCategory, setCategoryHidden } from '@/app/actions/categories';
-import type { Category, CategoryKind } from '@/lib/types';
-import { cn } from '@/lib/utils/format';
+import type { Category, CategoryKind, MerchantRule } from '@/lib/types';
+import { cn, formatCurrency } from '@/lib/utils/format';
 
 const ICONS = { utensils: Utensils, car: Car, 'shopping-bag': ShoppingBag, receipt: Receipt, film: Film, 'heart-pulse': HeartPulse, plane: Plane, home: Home, briefcase: Briefcase, circle: Circle } as const;
 const COLORS = ['#62D99A', '#F2A57E', '#E4C36B', '#B79BCB', '#7FB4C7'];
@@ -12,7 +12,7 @@ const COLORS = ['#62D99A', '#F2A57E', '#E4C36B', '#B79BCB', '#7FB4C7'];
 type Draft = { id?: string; name: string; kind: CategoryKind; icon: string; color: string };
 const EMPTY: Draft = { name: '', kind: 'expense', icon: 'circle', color: COLORS[0] };
 
-export function CategoriesManager({ initialCategories }: { initialCategories: Category[] }) {
+export function CategoriesManager({ initialCategories, rules, categorySpend }: { initialCategories: Category[]; rules: MerchantRule[]; categorySpend: Record<string, number> }) {
   const [categories, setCategories] = useState(initialCategories);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,23 +72,29 @@ export function CategoriesManager({ initialCategories }: { initialCategories: Ca
 
       {error && <p role="alert" className="rounded-xl border border-peach/30 bg-peach/10 px-3 py-2 text-sm text-peach">{error}</p>}
 
-      <div className="overflow-hidden rounded-2xl border border-ink-border bg-ink-raised">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid gap-3 sm:grid-cols-2">
         {categories.map((category, index) => {
           const CategoryIcon = ICONS[category.icon as keyof typeof ICONS] ?? Circle;
+          const spent = categorySpend[category.id] ?? 0;
+          const budget = Number(category.monthly_budget) || 0;
+          const progress = budget > 0 ? Math.min(100, spent / budget * 100) : 0;
           return (
-          <div key={category.id} className={cn('flex items-center gap-3 px-4 py-3', index > 0 && 'border-t border-ink-border', category.is_hidden && 'opacity-45')}>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-ink" style={{ backgroundColor: category.color }} aria-hidden="true"><CategoryIcon size={18} /></span>
-            <div className="min-w-0 flex-1"><p className="truncate font-semibold">{category.name}</p><p className="text-xs text-paper/40">{category.kind} · {category.icon}{category.is_default ? ' · default' : ''} · used {category.usage_count ?? 0}×</p></div>
+          <article key={category.id} className={cn('rounded-2xl border border-ink-border bg-ink-raised p-4', category.is_hidden && 'opacity-45')}>
+            <div className="flex items-start gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-ink" style={{ backgroundColor: category.color }} aria-hidden="true"><CategoryIcon size={19} /></span>
+            <div className="min-w-0 flex-1"><p className="truncate font-semibold">{category.name}</p><p className="text-xs text-paper/40">{category.kind}{category.is_default ? ' · default' : ''} · used {category.usage_count ?? 0}×</p></div>
             <div className="flex items-center gap-1">
               <button type="button" disabled={index === 0 || pending} onClick={() => move(category, -1)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-paper/55 disabled:opacity-25" aria-label={`Move ${category.name} up`}><ArrowUp size={15} /></button>
               <button type="button" disabled={index === categories.length - 1 || pending} onClick={() => move(category, 1)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-paper/55 disabled:opacity-25" aria-label={`Move ${category.name} down`}><ArrowDown size={15} /></button>
-              <button type="button" onClick={() => toggle(category)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-paper/55" aria-label={`${category.is_hidden ? 'Show' : 'Hide'} ${category.name}`}>{category.is_hidden ? <Eye size={15} /> : <EyeOff size={15} />}</button>
-              {!category.is_default && <button type="button" onClick={() => setDraft({ id: category.id, name: category.name, kind: category.kind, icon: category.icon, color: category.color })} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-paper/55" aria-label={`Edit ${category.name}`}><Pencil size={15} /></button>}
-              {!category.is_default && <button type="button" onClick={() => remove(category)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-peach" aria-label={`Delete ${category.name}`}><Trash2 size={15} /></button>}
             </div>
-          </div>
+            </div>
+            <div className="mt-4"><div className="flex items-center justify-between text-[11px] text-paper/40"><span>{budget > 0 ? `${formatCurrency(spent)} spent` : `${formatCurrency(spent)} this month`}</span><span>{budget > 0 ? `of ${formatCurrency(budget)}` : 'No budget set'}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink"><span className="block h-full rounded-full bg-mint" style={{ width: `${progress}%` }} /></div></div>
+            <div className="mt-4 flex items-center justify-end gap-1 border-t border-ink-border pt-3"><button type="button" onClick={() => toggle(category)} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-2 text-xs text-paper/55" aria-label={`${category.is_hidden ? 'Show' : 'Hide'} ${category.name}`}>{category.is_hidden ? <Eye size={14} /> : <EyeOff size={14} />}{category.is_hidden ? 'Show' : 'Hide'}</button>{!category.is_default && <button type="button" onClick={() => setDraft({ id: category.id, name: category.name, kind: category.kind, icon: category.icon, color: category.color })} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-paper/55" aria-label={`Edit ${category.name}`}><Pencil size={15} /></button>}{!category.is_default && <button type="button" onClick={() => remove(category)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-peach" aria-label={`Delete ${category.name}`}><Trash2 size={15} /></button>}</div>
+          </article>
           );
         })}
+      </div>
+      <aside className="rounded-2xl border border-ink-border bg-ink-raised p-4 lg:sticky lg:top-6"><p className="text-xs font-semibold uppercase tracking-[.14em] text-mint">Auto-rules</p><h2 className="mt-1 font-bold">Merchant matches</h2><p className="mt-1 text-xs leading-5 text-paper/45">Corrections teach C-137 locally before any AI call.</p><div className="mt-4 space-y-2">{rules.slice(0, 12).map((rule) => { const category = categories.find((item) => item.id === rule.category_id); const RuleIcon = ICONS[category?.icon as keyof typeof ICONS] ?? Circle; return <div key={rule.id} className="flex items-center gap-2 rounded-xl bg-ink px-3 py-2.5"><span className="flex h-8 w-8 items-center justify-center rounded-lg text-ink" style={{ backgroundColor: category?.color ?? COLORS[0] }}><RuleIcon size={14} /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{rule.merchant_pattern}</p><p className="truncate text-[11px] text-paper/40">→ {category?.name ?? 'Category'} · {rule.usage_count} matches</p></div></div>; })}{rules.length === 0 && <p className="rounded-xl border border-dashed border-ink-border px-3 py-5 text-center text-xs text-paper/40">Rules appear as you correct merchant categories.</p>}</div></aside>
       </div>
 
       {draft && (

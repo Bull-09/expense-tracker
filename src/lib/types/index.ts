@@ -23,6 +23,7 @@ export interface Category {
   is_hidden: boolean;
   sort_order: number;
   usage_count: number;
+  monthly_budget?: number | null;
   last_used_at: string | null;
   created_at: string;
 }
