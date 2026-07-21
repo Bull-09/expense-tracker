@@ -19,7 +19,7 @@ function refreshCategories() {
   revalidatePath('/dashboard/categories');
 }
 
-export async function saveCategory(input: { id?: string; name: string; kind: string; icon: string; color: string }) {
+export async function saveCategory(input: { id?: string; name: string; kind: string; icon: string; color: string; monthlyBudget?: number | null }) {
   const { supabase, user } = await authenticatedClient();
   const name = input.name.trim().replace(/\s+/g, ' ').slice(0, 40);
   if (!name) throw new Error('Category name is required.');
@@ -29,12 +29,14 @@ export async function saveCategory(input: { id?: string; name: string; kind: str
   if (input.id) {
     const { data: existing, error: lookupError } = await supabase.from('categories').select('user_id').eq('id', input.id).single();
     if (lookupError) throw new Error(lookupError.message);
-    if (!existing.user_id) throw new Error('System categories can be hidden or reordered, but not renamed.');
-    const { error } = await supabase.from('categories').update({ name, kind: input.kind, icon: input.icon, color: input.color }).eq('id', input.id);
+    const patch = existing.user_id
+      ? { name, kind: input.kind, icon: input.icon, color: input.color, monthly_budget: input.monthlyBudget ?? null }
+      : { monthly_budget: input.monthlyBudget ?? null };
+    const { error } = await supabase.from('categories').update(patch).eq('id', input.id);
     if (error) throw new Error(error.message);
   } else {
     const { data: last } = await supabase.from('categories').select('sort_order').order('sort_order', { ascending: false }).limit(1).maybeSingle();
-    const { error } = await supabase.from('categories').insert({ user_id: user.id, name, kind: input.kind, icon: input.icon, color: input.color, sort_order: (last?.sort_order ?? 0) + 10 });
+    const { error } = await supabase.from('categories').insert({ user_id: user.id, name, kind: input.kind, icon: input.icon, color: input.color, monthly_budget: input.monthlyBudget ?? null, sort_order: (last?.sort_order ?? 0) + 10 });
     if (error) throw new Error(error.message);
   }
   refreshCategories();

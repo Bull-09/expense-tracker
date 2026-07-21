@@ -110,6 +110,7 @@ create table if not exists public.categories (
   is_hidden boolean not null default false,
   sort_order integer not null default 0,
   usage_count integer not null default 0,
+  monthly_budget numeric(12,2),
   last_used_at timestamptz,
   created_at timestamptz not null default now(),
   unique (user_id, name, kind)

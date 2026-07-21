@@ -9,6 +9,7 @@ export interface Profile {
   avatar_color: string;
   monthly_budget: number | null;
   upi_id?: string | null;
+  currency?: string | null;
   created_at: string;
 }
 

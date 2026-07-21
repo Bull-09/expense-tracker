@@ -9,8 +9,8 @@ import { cn, formatCurrency } from '@/lib/utils/format';
 const ICONS = { utensils: Utensils, car: Car, 'shopping-bag': ShoppingBag, receipt: Receipt, film: Film, 'heart-pulse': HeartPulse, plane: Plane, home: Home, briefcase: Briefcase, circle: Circle } as const;
 const COLORS = ['#62D99A', '#F2A57E', '#E4C36B', '#B79BCB', '#7FB4C7'];
 
-type Draft = { id?: string; name: string; kind: CategoryKind; icon: string; color: string };
-const EMPTY: Draft = { name: '', kind: 'expense', icon: 'circle', color: COLORS[0] };
+type Draft = { id?: string; name: string; kind: CategoryKind; icon: string; color: string; monthlyBudget: string };
+const EMPTY: Draft = { name: '', kind: 'expense', icon: 'circle', color: COLORS[0], monthlyBudget: '' };
 
 export function CategoriesManager({ initialCategories, rules, categorySpend }: { initialCategories: Category[]; rules: MerchantRule[]; categorySpend: Record<string, number> }) {
   const [categories, setCategories] = useState(initialCategories);
@@ -56,7 +56,7 @@ export function CategoriesManager({ initialCategories, rules, categorySpend }: {
     if (!draft?.name.trim()) return;
     try {
       setError(null);
-      await saveCategory(draft);
+      await saveCategory({ ...draft, monthlyBudget: draft.monthlyBudget ? Number(draft.monthlyBudget) : null });
       window.location.reload();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save category.');
@@ -89,7 +89,7 @@ export function CategoriesManager({ initialCategories, rules, categorySpend }: {
             </div>
             </div>
             <div className="mt-4"><div className="flex items-center justify-between text-[11px] text-paper/40"><span>{budget > 0 ? `${formatCurrency(spent)} spent` : `${formatCurrency(spent)} this month`}</span><span>{budget > 0 ? `of ${formatCurrency(budget)}` : 'No budget set'}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink"><span className="block h-full rounded-full bg-mint" style={{ width: `${progress}%` }} /></div></div>
-            <div className="mt-4 flex items-center justify-end gap-1 border-t border-ink-border pt-3"><button type="button" onClick={() => toggle(category)} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-2 text-xs text-paper/55" aria-label={`${category.is_hidden ? 'Show' : 'Hide'} ${category.name}`}>{category.is_hidden ? <Eye size={14} /> : <EyeOff size={14} />}{category.is_hidden ? 'Show' : 'Hide'}</button>{!category.is_default && <button type="button" onClick={() => setDraft({ id: category.id, name: category.name, kind: category.kind, icon: category.icon, color: category.color })} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-paper/55" aria-label={`Edit ${category.name}`}><Pencil size={15} /></button>}{!category.is_default && <button type="button" onClick={() => remove(category)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-peach" aria-label={`Delete ${category.name}`}><Trash2 size={15} /></button>}</div>
+            <div className="mt-4 flex items-center justify-end gap-1 border-t border-ink-border pt-3"><button type="button" onClick={() => toggle(category)} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-2 text-xs text-paper/55" aria-label={`${category.is_hidden ? 'Show' : 'Hide'} ${category.name}`}>{category.is_hidden ? <Eye size={14} /> : <EyeOff size={14} />}{category.is_hidden ? 'Show' : 'Hide'}</button><button type="button" onClick={() => setDraft({ id: category.id, name: category.name, kind: category.kind, icon: category.icon, color: category.color, monthlyBudget: category.monthly_budget ? String(category.monthly_budget) : '' })} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-paper/55" aria-label={`Edit ${category.name}`}><Pencil size={15} /></button>{!category.is_default && <button type="button" onClick={() => remove(category)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-peach" aria-label={`Delete ${category.name}`}><Trash2 size={15} /></button>}</div>
           </article>
           );
         })}
@@ -104,6 +104,7 @@ export function CategoriesManager({ initialCategories, rules, categorySpend }: {
             <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-bold">{draft.id ? 'Edit category' : 'New category'}</h2><button type="button" onClick={() => setDraft(null)} className="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-paper/60"><X size={17} /></button></div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-paper/40">Name<input autoFocus value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className="mt-2 h-11 w-full rounded-xl border border-ink-border bg-ink px-3 text-sm normal-case tracking-normal text-paper outline-none focus:border-mint" /></label>
             <label className="mt-4 block text-xs font-semibold uppercase tracking-wider text-paper/40">Type<select value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value as CategoryKind })} className="mt-2 h-11 w-full rounded-xl border border-ink-border bg-ink px-3 text-sm normal-case text-paper"><option value="expense">Expense</option><option value="income">Income</option></select></label>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wider text-paper/40">Monthly budget<input type="number" min="0" step="100" value={draft.monthlyBudget} onChange={(event) => setDraft({ ...draft, monthlyBudget: event.target.value })} placeholder="No limit" className="mt-2 h-11 w-full rounded-xl border border-ink-border bg-ink px-3 font-ledger text-sm normal-case tracking-normal text-paper outline-none focus:border-mint" /></label>
             <div className="mt-4"><p className="text-xs font-semibold uppercase tracking-wider text-paper/40">Icon</p><div className="mt-2 flex flex-wrap gap-2">{Object.entries(ICONS).map(([name, Icon]) => <button key={name} type="button" onClick={() => setDraft({ ...draft, icon: name })} className={cn('flex h-10 w-10 items-center justify-center rounded-xl border-2 bg-ink text-paper/65', draft.icon === name ? 'border-mint text-mint' : 'border-ink-border')} aria-label={name}><Icon size={18} /></button>)}</div></div>
             <div className="mt-4"><p className="text-xs font-semibold uppercase tracking-wider text-paper/40">Color</p><div className="mt-2 flex flex-wrap gap-2">{COLORS.map((color) => <button key={color} type="button" onClick={() => setDraft({ ...draft, color })} className={cn('h-9 w-9 rounded-full border-2', draft.color === color ? 'border-paper' : 'border-transparent')} style={{ backgroundColor: color }} aria-label={color} />)}</div></div>
             <button type="button" onClick={() => void submit()} className="mt-5 h-12 w-full rounded-xl bg-mint text-sm font-bold text-ink">Save category</button>

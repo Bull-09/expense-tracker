@@ -480,8 +480,8 @@ export function CaptureSheet({
       inert={!open}
     >
       <button type="button" className="absolute inset-0" onClick={close} aria-label="Close capture" />
-      <section className={cn('relative flex max-h-[96dvh] w-full flex-col overflow-hidden rounded-t-[28px] border border-ink-border bg-ink-raised shadow-2xl transition-transform duration-[90ms] md:max-h-[92dvh] md:max-w-[520px] md:rounded-[28px]', open ? 'translate-y-0' : 'translate-y-3')}>
-        <div className="flex items-center justify-between border-b border-ink-border px-5 py-4">
+      <section className={cn('relative flex max-h-[96dvh] w-full flex-col overflow-hidden rounded-t-[28px] border border-ink-border bg-ink-raised shadow-2xl transition-transform duration-[90ms] md:max-h-[92dvh] md:max-w-[520px] md:rounded-[28px]', mode === 'voice' && !voiceDraftReady && 'h-dvh max-h-dvh rounded-none border-0 bg-ink md:h-auto md:min-h-[680px] md:rounded-[28px] md:border', open ? 'translate-y-0' : 'translate-y-3')}>
+        {mode === 'voice' && !voiceDraftReady ? <div className="flex items-center justify-between px-6 pb-2 pt-[max(24px,env(safe-area-inset-top))] md:pt-5"><span className="text-xs font-semibold uppercase tracking-[.14em] text-paper/45">{listening ? 'Listening' : 'Voice capture'}</span><button type="button" onClick={close} className="flex h-9 w-9 items-center justify-center rounded-full border border-ink-border bg-ink-raised text-paper/60" aria-label="Close"><X size={17} /></button></div> : <div className="flex items-center justify-between border-b border-ink-border px-5 py-4">
           <button type="button" onClick={close} className="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-paper/60 md:hidden" aria-label="Back">
             <ArrowLeft size={18} />
           </button>
@@ -492,9 +492,9 @@ export function CaptureSheet({
           <button type="button" onClick={close} className="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-paper/60" aria-label="Close">
             <X size={18} />
           </button>
-        </div>
+        </div>}
 
-        <div className="grid grid-cols-3 border-b border-ink-border px-5 pt-2" role="tablist" aria-label="Capture mode">
+        {!(mode === 'voice' && !voiceDraftReady) && <div className="grid grid-cols-3 border-b border-ink-border px-5 pt-2" role="tablist" aria-label="Capture mode">
           <button type="button" role="tab" aria-selected={mode === 'keypad'} onClick={() => setMode('keypad')} className={cn('flex h-12 items-center justify-center gap-2 border-b-2 text-sm font-semibold', mode === 'keypad' ? 'border-mint text-mint' : 'border-transparent text-paper/55')}>
             <ReceiptText size={17} /> Keypad
           </button>
@@ -504,10 +504,10 @@ export function CaptureSheet({
           <button type="button" role="tab" aria-selected={mode === 'scan'} onClick={selectScan} className={cn('flex h-12 items-center justify-center gap-2 border-b-2 text-sm font-medium', mode === 'scan' ? 'border-mint text-mint' : 'border-transparent text-paper/55 hover:text-paper')}>
             <ScanLine size={17} /> Scan
           </button>
-        </div>
+        </div>}
 
         <div className="thin-scroll overflow-y-auto px-5 pb-[max(22px,env(safe-area-inset-bottom))] pt-4">
-          <div className="grid grid-cols-3 rounded-xl bg-ink p-1">
+          {!(mode === 'voice' && !voiceDraftReady) && <div className="grid grid-cols-3 rounded-xl bg-ink p-1">
             {ENTRY_TYPES.map((entry) => (
               <button
                 key={entry.value}
@@ -518,10 +518,10 @@ export function CaptureSheet({
                 {entry.label}
               </button>
             ))}
-          </div>
+          </div>}
 
           {mode === 'voice' && !voiceDraftReady && (
-            <div className="flex min-h-64 flex-col items-center justify-center py-6 text-center">
+            <div className="flex min-h-[calc(100dvh-100px)] flex-col items-center justify-center py-6 text-center md:min-h-[560px]">
               <div className="mb-5 flex h-16 items-center justify-center gap-1" aria-hidden="true">
                 {[.38, .7, 1, .62, .88, .48, .78, .56, .92, .42].map((scale, index) => <span key={index} className={cn('h-14 w-1.5 origin-center rounded-full bg-mint', listening ? 'voice-wave-bar' : 'scale-y-[.16] opacity-45')} style={{ '--voice-scale': scale, animationDelay: `${index * 80}ms` } as React.CSSProperties} />)}
               </div>
@@ -529,7 +529,7 @@ export function CaptureSheet({
                 {listening ? <Square size={25} fill="currentColor" /> : <Mic size={30} />}
               </button>
               <p className="mt-4 font-semibold">{listening ? 'Listening… tap to stop' : 'Tap to start'}</p>
-              <p className="mt-1 min-h-10 max-w-xs text-sm text-paper/55" aria-live="polite">{displayedTranscript || 'Try “Spent 450 at Swiggy”'}{listening && displayedTranscript && <span className="ml-0.5 animate-pulse text-mint">|</span>}</p>
+              <p className="mt-5 min-h-20 max-w-sm text-xl font-semibold leading-relaxed text-paper/75" aria-live="polite">{displayedTranscript ? `“${displayedTranscript}”` : 'Try “Spent 450 at Swiggy”'}{listening && displayedTranscript && <span className="ml-0.5 animate-pulse text-mint">|</span>}</p>
               {!speechAvailable && <button type="button" onClick={() => setMode('keypad')} className="mt-4 text-sm font-semibold text-mint">Use keypad instead</button>}
             </div>
           )}

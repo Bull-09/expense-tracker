@@ -6,16 +6,16 @@ import {
   ensureDueSubscriptionTransactions,
   computeTotals,
   computeBalances,
+  getAllCategories,
 } from '@/lib/data/dashboard';
 import { generateInsights, generateBudgetInsight } from '@/lib/insights';
 import { estimateMoneyFlow } from '@/lib/forecast';
-import { SummaryStrip } from '@/components/dashboard/SummaryStrip';
 import { BalancesCard } from '@/components/dashboard/BalancesCard';
 import { InsightsCard } from '@/components/dashboard/InsightsCard';
 import { EstimateCard } from '@/components/dashboard/EstimateCard';
-import { CategoryBreakdownChart } from '@/components/dashboard/CategoryBreakdownChart';
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { SubscriptionBurnCard } from '@/components/dashboard/SubscriptionBurnCard';
+import { HomeOverview } from '@/components/dashboard/HomeOverview';
 
 export default async function DashboardPage() {
   const profile = await getCurrentProfile();
@@ -23,10 +23,11 @@ export default async function DashboardPage() {
 
   await ensureDueSubscriptionTransactions();
 
-  const [transactions, splitShares, subscriptions] = await Promise.all([
+  const [transactions, splitShares, subscriptions, categories] = await Promise.all([
     getTransactions(),
     getSplitShares(),
     getSubscriptions(),
+    getAllCategories(),
   ]);
 
   const totals = computeTotals(transactions, splitShares, profile.id);
@@ -46,11 +47,9 @@ export default async function DashboardPage() {
         <p className="text-paper/50 text-sm mt-1">Here&apos;s where things stand this month.</p>
       </div>
 
-      <SummaryStrip totals={totals} />
-
       <div className="grid lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 flex flex-col gap-5">
-          <CategoryBreakdownChart transactions={transactions} />
+          <HomeOverview profile={profile} totals={totals} categories={categories} transactions={transactions} balances={balances} />
           <RecentTransactions transactions={transactions} />
         </div>
         <div className="flex flex-col gap-5">
