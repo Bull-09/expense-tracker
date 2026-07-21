@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { Check, Copy, Download, Share2, Smartphone } from 'lucide-react';
+import { Check, Copy, Download, KeyRound, Share2, Smartphone } from 'lucide-react';
 import { Profile } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -21,6 +21,12 @@ export function SettingsForm({ profile }: { profile: Profile }) {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [appUrl, setAppUrl] = useState('');
   const [hasNativeShare, setHasNativeShare] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordPending, setPasswordPending] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSaved, setPasswordSaved] = useState(false);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -71,6 +77,53 @@ export function SettingsForm({ profile }: { profile: Profile }) {
     if (!installPrompt) return;
     await installPrompt.prompt();
     setInstallPrompt(null);
+  }
+
+  async function handlePasswordChange(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSaved(false);
+
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match.');
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setPasswordError('Choose a password different from your current password.');
+      return;
+    }
+
+    setPasswordPending(true);
+
+    const { error: verificationError } = await supabase.auth.signInWithPassword({
+      email: profile.email,
+      password: currentPassword,
+    });
+
+    if (verificationError) {
+      setPasswordError('Current password is incorrect.');
+      setPasswordPending(false);
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setPasswordPending(false);
+
+    if (error) {
+      setPasswordError(error.message);
+      return;
+    }
+
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordSaved(true);
   }
 
   return (
@@ -154,6 +207,54 @@ export function SettingsForm({ profile }: { profile: Profile }) {
             {isPending ? 'Saving…' : 'Save budget'}
           </Button>
           {saved && <span className="text-sm text-mint">Saved</span>}
+        </div>
+      </form>
+
+      <form onSubmit={handlePasswordChange} className="rounded-xl border border-ink-border bg-ink-raised p-5 flex flex-col gap-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-mint/15 text-mint">
+            <KeyRound size={20} />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-paper/60 uppercase tracking-wide">Change password</h2>
+            <p className="mt-1 text-sm text-paper/50">Confirm your current password, then choose a new one with at least 8 characters.</p>
+          </div>
+        </div>
+        <Input
+          id="current-password"
+          type="password"
+          label="Current password"
+          autoComplete="current-password"
+          required
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+        />
+        <Input
+          id="new-password"
+          type="password"
+          label="New password"
+          autoComplete="new-password"
+          minLength={8}
+          required
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+        />
+        <Input
+          id="confirm-password"
+          type="password"
+          label="Confirm new password"
+          autoComplete="new-password"
+          minLength={8}
+          required
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" disabled={passwordPending}>
+            {passwordPending ? 'Updating…' : 'Update password'}
+          </Button>
+          {passwordSaved && <span className="text-sm text-mint">Password updated</span>}
+          {passwordError && <span role="alert" className="text-sm text-peach">{passwordError}</span>}
         </div>
       </form>
 
