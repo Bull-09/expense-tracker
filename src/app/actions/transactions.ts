@@ -269,6 +269,13 @@ export async function createFriendLedgerEntry(input: {
   });
 
   if (splitError) {
+    // Keep the ledger atomic: a failed share must not leave a transfer behind.
+    await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', transaction.id)
+      .eq('user_id', user.id);
+
     throw new Error(
       borrowed
         ? `${splitError.message}. Run the latest Supabase split policy update so borrowed money can be tracked.`
