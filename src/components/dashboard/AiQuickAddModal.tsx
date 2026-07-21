@@ -920,7 +920,7 @@ export function AiQuickAddModal({
   }
 
   return (
-    <div className="fixed inset-x-0 bottom-24 z-30 px-3 md:bottom-5 md:left-[76px] lg:left-[232px]">
+    <div className="fixed inset-x-0 bottom-24 z-30 px-3 md:bottom-5 md:left-[76px] xl:left-[232px]">
       <div className="mx-auto flex max-w-3xl flex-col overflow-hidden rounded-2xl border border-ink-border bg-ink-raised/95 shadow-2xl shadow-black/30 backdrop-blur">
         <button
           type="button"

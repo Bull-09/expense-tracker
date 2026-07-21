@@ -100,11 +100,11 @@ export function AppShell({
   }
 
   return (
-    <div className="min-h-screen bg-ink text-paper md:pl-[76px] lg:pl-[232px]">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[76px] flex-col border-r border-ink-border bg-ink-raised px-3 py-5 md:flex lg:w-[232px] lg:px-4">
-        <Link href="/dashboard" className="mb-9 flex h-10 items-center justify-center gap-3 lg:justify-start lg:px-2">
+    <div className="min-h-screen bg-ink text-paper md:pl-[76px] xl:pl-[232px]">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[76px] flex-col border-r border-ink-border bg-ink-raised px-3 py-5 md:flex xl:w-[232px] xl:px-4">
+        <Link href="/dashboard" className="mb-9 flex h-10 items-center justify-center gap-3 xl:justify-start xl:px-2">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-mint font-ledger text-sm font-bold text-ink">₹</span>
-          <span className="hidden text-[15px] font-bold tracking-tight lg:block">C-137 Capital</span>
+          <span className="hidden text-[15px] font-bold tracking-tight xl:block">C-137 Capital</span>
         </Link>
 
         <nav className="flex flex-col gap-1.5" aria-label="Main navigation">
@@ -116,12 +116,12 @@ export function AppShell({
                 key={item.href}
                 href={item.href}
                 title={item.label}
-                className={`flex h-11 items-center justify-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors lg:justify-start ${
+                className={`flex h-11 items-center justify-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors xl:justify-start ${
                   active ? 'bg-mint/12 text-mint' : 'text-paper/55 hover:bg-ink-border-soft/60 hover:text-paper'
                 }`}
               >
                 <Icon size={20} strokeWidth={active ? 2.4 : 1.8} />
-                <span className="hidden lg:block">{item.label}</span>
+                <span className="hidden xl:block">{item.label}</span>
               </Link>
             );
           })}
@@ -133,22 +133,22 @@ export function AppShell({
           className="mt-6 flex h-11 items-center justify-center gap-2 rounded-xl bg-mint font-semibold text-ink transition-transform hover:scale-[1.02] active:scale-[0.98]"
         >
           <Plus size={20} strokeWidth={2.5} />
-          <span className="hidden lg:block">New entry</span>
+          <span className="hidden xl:block">New entry</span>
         </button>
 
         <div className="mt-auto border-t border-ink-border pt-4">
-          <Link href="/dashboard/settings" className="flex items-center justify-center gap-3 rounded-xl p-2 hover:bg-ink-border-soft/60 lg:justify-start">
+          <Link href="/dashboard/settings" className="flex items-center justify-center gap-3 rounded-xl p-2 hover:bg-ink-border-soft/60 xl:justify-start">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-ink" style={{ backgroundColor: profile.avatar_color }}>
               {profile.full_name.charAt(0).toUpperCase()}
             </span>
-            <span className="hidden min-w-0 lg:block">
+            <span className="hidden min-w-0 xl:block">
               <span className="block truncate text-sm font-semibold">{profile.full_name}</span>
               <span className="block truncate text-xs text-paper/40">{profile.email}</span>
             </span>
           </Link>
-          <button onClick={handleSignOut} title="Sign out" className="mt-2 flex h-10 w-full items-center justify-center gap-3 rounded-xl text-paper/40 hover:bg-peach/10 hover:text-peach lg:justify-start lg:px-3">
+          <button onClick={handleSignOut} title="Sign out" className="mt-2 flex h-10 w-full items-center justify-center gap-3 rounded-xl text-paper/40 hover:bg-peach/10 hover:text-peach xl:justify-start xl:px-3">
             <LogOut size={18} />
-            <span className="hidden text-sm lg:block">Sign out</span>
+            <span className="hidden text-sm xl:block">Sign out</span>
           </button>
         </div>
       </aside>
