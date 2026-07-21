@@ -19,6 +19,10 @@ export function rollbackOptimisticTransaction(temporaryId: string) {
   window.dispatchEvent(new CustomEvent<string>(ROLLBACK_EVENT, { detail: temporaryId }));
 }
 
+export function removeOptimisticTransaction(id: string) {
+  rollbackOptimisticTransaction(id);
+}
+
 export function useOptimisticTransactions(transactions: Transaction[]) {
   const [pending, setPending] = useState<Transaction[]>([]);
 

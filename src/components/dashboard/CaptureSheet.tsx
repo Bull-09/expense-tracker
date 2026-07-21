@@ -1,18 +1,28 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, Delete, Mic, ReceiptText, ScanLine, X } from 'lucide-react';
+import { ArrowLeft, Check, Delete, Mic, ReceiptText, RotateCcw, ScanLine, Square, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { createTransaction } from '@/app/actions/transactions';
+import { createTransaction, deleteTransaction } from '@/app/actions/transactions';
 import { learnMerchantRule } from '@/app/actions/categories';
 import { Category, DirectoryUser, MerchantRule, Transaction, TransactionKind } from '@/lib/types';
 import { matchMerchantRule } from '@/lib/categories/rules';
+import { parseVoiceTranscript } from '@/lib/capture/voice';
 import { cn, formatCurrency } from '@/lib/utils/format';
 import {
   confirmOptimisticTransaction,
   publishOptimisticTransaction,
   rollbackOptimisticTransaction,
+  removeOptimisticTransaction,
 } from '@/lib/transactions/optimistic';
+
+type SpeechRecognitionEventLike = Event & { results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> };
+type SpeechRecognitionLike = EventTarget & {
+  continuous: boolean; interimResults: boolean; lang: string;
+  start(): void; stop(): void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null; onend: (() => void) | null;
+};
 
 type KeypadKind = Extract<TransactionKind, 'expense' | 'income' | 'investment'>;
 
@@ -48,6 +58,7 @@ export function CaptureSheet({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<'keypad' | 'voice'>('keypad');
   const [kind, setKind] = useState<KeypadKind>('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -56,7 +67,18 @@ export function CaptureSheet({
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [speechAvailable, setSpeechAvailable] = useState(true);
+  const [listening, setListening] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [voiceDraftReady, setVoiceDraftReady] = useState(false);
+  const [resolution, setResolution] = useState<'local' | 'llm' | null>(null);
+  const [countdown, setCountdown] = useState(3);
+  const [editVersion, setEditVersion] = useState(0);
+  const [undoItem, setUndoItem] = useState<{ id: string; description: string } | null>(null);
   const sheetRootRef = useRef<HTMLDivElement | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const saveRef = useRef<() => Promise<void>>(async () => undefined);
 
   const relevantCategories = useMemo(
     () => categories.filter((category) => category.kind === (kind === 'income' ? 'income' : 'expense')),
@@ -78,8 +100,18 @@ export function CaptureSheet({
       setError(null);
     }
 
+    function showVoiceCapture() {
+      setMode('voice');
+      setOpen(true);
+      setError(null);
+    }
+
     window.addEventListener('c137:open-capture', showCapture);
-    return () => window.removeEventListener('c137:open-capture', showCapture);
+    window.addEventListener('c137:open-voice-capture', showVoiceCapture);
+    return () => {
+      window.removeEventListener('c137:open-capture', showCapture);
+      window.removeEventListener('c137:open-voice-capture', showVoiceCapture);
+    };
   }, []);
 
   useEffect(() => {
@@ -118,15 +150,91 @@ export function CaptureSheet({
     setCategoryWasChosen(false);
     setSelectedFriends([]);
     setError(null);
+    setTranscript('');
+    setInterimTranscript('');
+    setVoiceDraftReady(false);
+    setResolution(null);
+    setCountdown(3);
   }
 
   function close() {
+    recognitionRef.current?.stop();
     setOpen(false);
   }
 
-  function openVoice() {
-    close();
-    window.setTimeout(() => window.dispatchEvent(new Event('c137:open-ai-capture')), 0);
+  function selectVoice() {
+    setMode('voice');
+    setError(null);
+    const speechWindow = window as Window & { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
+    const available = Boolean(speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition);
+    setSpeechAvailable(available);
+    if (!available) setError('Voice capture is not supported in this browser. Use the keypad to add this entry.');
+  }
+
+  function markEdited() {
+    if (voiceDraftReady) { setCountdown(3); setEditVersion((value) => value + 1); }
+  }
+
+  async function resolveTranscript(finalText: string) {
+    const local = parseVoiceTranscript(finalText, merchantRules);
+    let draft = local;
+    let method: 'local' | 'llm' = 'local';
+
+    if (!local.resolvedLocally) {
+      method = 'llm';
+      const response = await fetch('/api/ai/quick-add', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: finalText, source: 'voice-web-speech' }),
+      });
+      const data = await response.json();
+      const aiDraft = data.drafts?.[0];
+      if (!response.ok || !aiDraft) throw new Error(data.error ?? 'I could not find a clear expense in that.');
+      draft = {
+        ...local,
+        amount: aiDraft.amount ?? local.amount,
+        categoryId: aiDraft.categoryId ?? local.categoryId,
+        description: aiDraft.description || local.description,
+        confidence: aiDraft.confidence ?? local.confidence,
+        resolvedLocally: false,
+      };
+    }
+
+    setAmount(draft.amount ? String(draft.amount) : '');
+    setCategoryId(draft.categoryId ?? '');
+    setDescription(draft.description);
+    setResolution(method);
+    setVoiceDraftReady(Boolean(draft.amount && draft.categoryId));
+    setCountdown(3);
+    console.info('[capture-resolution]', { source: 'voice', method, confidence: draft.confidence });
+    if (!draft.amount || !draft.categoryId) setError('Review the draft and add the missing amount or category before saving.');
+  }
+
+  function toggleListening() {
+    if (listening) { recognitionRef.current?.stop(); return; }
+    if (!speechAvailable) { setMode('keypad'); setError('Voice capture is unavailable here. Enter the expense with the keypad.'); return; }
+    const speechWindow = window as Window & { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
+    const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!Recognition) return;
+    const recognition = new Recognition();
+    recognition.continuous = false; recognition.interimResults = true; recognition.lang = 'en-IN';
+    let finalText = '';
+    recognition.onresult = (event) => {
+      let interim = '';
+      for (let index = 0; index < event.results.length; index += 1) {
+        if (event.results[index].isFinal) finalText += event.results[index][0].transcript;
+        else interim += event.results[index][0].transcript;
+      }
+      setInterimTranscript(interim);
+      setTranscript(finalText);
+    };
+    recognition.onerror = () => { setListening(false); setError('I could not access the microphone. Allow microphone access or use the keypad.'); };
+    recognition.onend = () => {
+      setListening(false); setInterimTranscript(''); recognitionRef.current = null;
+      if (finalText.trim()) void resolveTranscript(finalText.trim()).catch((reason) => setError(reason instanceof Error ? reason.message : 'Could not parse that voice note.'));
+    };
+    recognitionRef.current = recognition;
+    setTranscript(''); setVoiceDraftReady(false); setError(null); setListening(true);
+    recognition.start();
   }
 
   const toggleFriend = useCallback((id: string) => {
@@ -139,7 +247,7 @@ export function CaptureSheet({
       <button
         key={category.id}
         type="button"
-        onClick={() => { setCategoryId(category.id); setCategoryWasChosen(true); }}
+        onClick={() => { if (voiceDraftReady) { setCountdown(3); setEditVersion((value) => value + 1); } setCategoryId(category.id); setCategoryWasChosen(true); }}
         className={cn('flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium', selected ? 'border-mint/60 bg-mint/10 text-mint' : 'border-ink-border text-paper/50')}
       >
         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: category.color }} />
@@ -147,7 +255,7 @@ export function CaptureSheet({
         {selected && <Check size={13} />}
       </button>
     );
-  }), [relevantCategories, selectedCategory?.id]);
+  }), [relevantCategories, selectedCategory?.id, voiceDraftReady]);
 
   const friendChips = useMemo(() => friends.map((friend) => {
     const selected = selectedFriends.includes(friend.id);
@@ -162,7 +270,7 @@ export function CaptureSheet({
     );
   }), [friends, selectedFriends, toggleFriend]);
 
-  async function save() {
+  async function save(autoSave = false) {
     if (numericAmount <= 0 || submitting) return;
     setSubmitting(true);
     setError(null);
@@ -205,6 +313,10 @@ export function CaptureSheet({
         void learnMerchantRule({ text: description, categoryId: selectedCategory.id }).catch(() => undefined);
       }
       confirmOptimisticTransaction(temporaryId, { ...transaction, category: selectedCategory ?? null });
+      if (autoSave) {
+        setUndoItem({ id: transaction.id, description: finalDescription });
+        window.setTimeout(() => setUndoItem((current) => current?.id === transaction.id ? null : current), 3000);
+      }
       reset();
       router.refresh();
     } catch (saveError) {
@@ -216,7 +328,33 @@ export function CaptureSheet({
     }
   }
 
-  return (
+  useEffect(() => {
+    saveRef.current = () => save(true);
+  });
+
+  useEffect(() => {
+    if (!open || mode !== 'voice' || !voiceDraftReady || numericAmount <= 0 || !selectedCategory || submitting) return;
+    const startedAt = Date.now();
+    const interval = window.setInterval(() => setCountdown(Math.max(0, 3 - Math.floor((Date.now() - startedAt) / 1000))), 250);
+    const timeout = window.setTimeout(() => void saveRef.current(), 3000);
+    return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
+  }, [editVersion, mode, numericAmount, open, selectedCategory, submitting, voiceDraftReady]);
+
+  async function undoAutoSave() {
+    if (!undoItem) return;
+    const item = undoItem;
+    setUndoItem(null);
+    try {
+      await deleteTransaction(item.id);
+      removeOptimisticTransaction(item.id);
+      router.refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not undo that save.');
+      setOpen(true);
+    }
+  }
+
+  return <>
     <div
       ref={sheetRootRef}
       className={cn(
@@ -245,10 +383,10 @@ export function CaptureSheet({
         </div>
 
         <div className="grid grid-cols-3 border-b border-ink-border px-5 pt-2" role="tablist" aria-label="Capture mode">
-          <button type="button" role="tab" aria-selected="true" className="flex h-12 items-center justify-center gap-2 border-b-2 border-mint text-sm font-semibold text-mint">
+          <button type="button" role="tab" aria-selected={mode === 'keypad'} onClick={() => setMode('keypad')} className={cn('flex h-12 items-center justify-center gap-2 border-b-2 text-sm font-semibold', mode === 'keypad' ? 'border-mint text-mint' : 'border-transparent text-paper/55')}>
             <ReceiptText size={17} /> Keypad
           </button>
-          <button type="button" role="tab" aria-selected="false" onClick={openVoice} className="flex h-12 items-center justify-center gap-2 border-b-2 border-transparent text-sm font-medium text-paper/55 hover:text-paper">
+          <button type="button" role="tab" aria-selected={mode === 'voice'} onClick={selectVoice} className={cn('flex h-12 items-center justify-center gap-2 border-b-2 text-sm font-medium', mode === 'voice' ? 'border-mint text-mint' : 'border-transparent text-paper/55 hover:text-paper')}>
             <Mic size={17} /> Voice
           </button>
           <button type="button" role="tab" aria-selected="false" disabled className="flex h-12 cursor-not-allowed items-center justify-center gap-2 border-b-2 border-transparent text-sm font-medium text-paper/25" title="Coming soon">
@@ -270,31 +408,55 @@ export function CaptureSheet({
             ))}
           </div>
 
+          {mode === 'voice' && !voiceDraftReady && (
+            <div className="flex min-h-64 flex-col items-center justify-center py-6 text-center">
+              <div className="mb-5 flex h-16 items-end justify-center gap-1" aria-hidden="true">
+                {[18, 34, 52, 40, 60, 30, 46, 22].map((height, index) => <span key={index} className={cn('w-1.5 rounded-full bg-mint transition-all', listening && 'animate-pulse')} style={{ height: listening ? `${height}px` : '10px', animationDelay: `${index * 70}ms` }} />)}
+              </div>
+              <button type="button" onClick={toggleListening} className={cn('flex h-20 w-20 items-center justify-center rounded-full border-4 shadow-xl transition-transform active:scale-95', listening ? 'border-peach/40 bg-peach text-ink' : 'border-mint/30 bg-mint text-ink')} aria-label={listening ? 'Stop listening' : 'Start voice capture'}>
+                {listening ? <Square size={25} fill="currentColor" /> : <Mic size={30} />}
+              </button>
+              <p className="mt-4 font-semibold">{listening ? 'Listening… tap to stop' : 'Tap to start'}</p>
+              <p className="mt-1 max-w-xs text-sm text-paper/45">{interimTranscript || transcript || 'Try “Spent 450 at Swiggy”'}</p>
+              {!speechAvailable && <button type="button" onClick={() => setMode('keypad')} className="mt-4 text-sm font-semibold text-mint">Use keypad instead</button>}
+            </div>
+          )}
+
+          {(mode === 'keypad' || voiceDraftReady) && <>
+          {mode === 'voice' && voiceDraftReady && (
+            <div className="mb-2 flex items-center justify-between rounded-xl border border-mint/25 bg-mint/10 px-3 py-2 text-xs text-mint">
+              <span>{resolution === 'local' ? 'Resolved locally · zero AI tokens' : 'Transcript refined with AI'} — editable draft</span>
+              <span className="font-ledger font-bold">Saving in {countdown}s</span>
+            </div>
+          )}
           <div className="flex min-h-24 items-center justify-center py-3 text-center">
-            <span className="font-ledger text-[clamp(44px,13vw,56px)] font-semibold tracking-[-0.06em] text-paper" aria-label={`Amount ${numericAmount}`}>
-              <span className="mr-1 text-[0.55em] text-paper/35">₹</span>{amount || '0'}
-            </span>
+            <span className="mr-1 font-ledger text-2xl text-paper/35">₹</span>
+            {mode === 'voice' ? (
+              <input inputMode="decimal" value={amount} onChange={(event) => { markEdited(); setAmount(event.target.value.replace(/[^0-9.]/g, '')); }} aria-label="Amount" className="w-48 bg-transparent text-center font-ledger text-[clamp(44px,13vw,56px)] font-semibold tracking-[-0.06em] text-paper outline-none" />
+            ) : (
+              <span className="font-ledger text-[clamp(44px,13vw,56px)] font-semibold tracking-[-0.06em] text-paper" aria-label={`Amount ${numericAmount}`}>{amount || '0'}</span>
+            )}
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          {mode === 'keypad' && <div className="grid grid-cols-3 gap-2">
             {KEYS.map((key) => (
               <button
                 key={key}
                 type="button"
-                onClick={() => setAmount((current) => updateAmount(current, key))}
+                onClick={() => { markEdited(); setAmount((current) => updateAmount(current, key)); }}
                 className="flex h-12 items-center justify-center rounded-xl bg-ink text-lg font-semibold text-paper/80 transition-colors hover:bg-ink-border-soft active:bg-mint/15"
                 aria-label={key === 'backspace' ? 'Delete digit' : key}
               >
                 {key === 'backspace' ? <Delete size={20} /> : key}
               </button>
             ))}
-          </div>
+          </div>}
 
           <label className="mt-4 block">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-paper/35">Description <span className="normal-case tracking-normal">(optional)</span></span>
             <input
               value={description}
-              onChange={(event) => setDescription(event.target.value)}
+              onChange={(event) => { markEdited(); setDescription(event.target.value); }}
               placeholder={selectedCategory?.name || 'What was this for?'}
               className="h-11 w-full rounded-xl border border-ink-border bg-ink px-3.5 text-sm text-paper placeholder:text-paper/30 focus:border-mint/60 focus:outline-none"
             />
@@ -328,14 +490,21 @@ export function CaptureSheet({
 
           <button
             type="button"
-            onClick={() => void save()}
+            onClick={() => void save(false)}
             disabled={numericAmount <= 0 || submitting}
             className="mt-5 flex h-12 w-full items-center justify-center rounded-xl bg-mint text-sm font-bold text-ink transition-colors hover:bg-mint/90 disabled:cursor-not-allowed disabled:opacity-35"
           >
             {submitting ? 'Saving…' : numericAmount > 0 ? `Save ${formatCurrency(numericAmount)}` : 'Enter an amount'}
           </button>
+          </>}
         </div>
       </section>
     </div>
-  );
+    {undoItem && (
+      <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-1/2 z-[90] flex w-[min(92vw,420px)] -translate-x-1/2 items-center gap-3 rounded-2xl border border-mint/25 bg-ink-raised px-4 py-3 shadow-2xl">
+        <Check size={18} className="text-mint" /><p className="min-w-0 flex-1 truncate text-sm">Saved {undoItem.description}</p>
+        <button type="button" onClick={() => void undoAutoSave()} className="flex items-center gap-1.5 text-sm font-bold text-mint"><RotateCcw size={15} /> Undo</button>
+      </div>
+    )}
+  </>;
 }

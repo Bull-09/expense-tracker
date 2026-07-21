@@ -110,7 +110,8 @@ export function AppShell({
   }
 
   function openVoiceCapture() {
-    window.dispatchEvent(new Event('c137:open-ai-capture'));
+    performance.mark('c137-capture-requested');
+    window.dispatchEvent(new Event('c137:open-voice-capture'));
   }
 
   function startLongPress() {
