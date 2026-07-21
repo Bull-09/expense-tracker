@@ -94,8 +94,8 @@ export function SettingsForm({ profile }: { profile: Profile }) {
         </p>
       </div>
 
-      <div className="rounded-xl border border-emerald/30 bg-emerald/5 p-5">
-        <h2 className="text-sm font-semibold text-emerald uppercase tracking-wide mb-2">Share with friends</h2>
+      <div className="rounded-xl border border-mint/30 bg-mint/5 p-5">
+        <h2 className="text-sm font-semibold text-mint uppercase tracking-wide mb-2">Share with friends</h2>
         <p className="text-sm text-paper/50 mb-4">
           Send this link to people you split expenses with. Once they sign up, they&apos;ll appear in your split picker.
         </p>
@@ -112,7 +112,7 @@ export function SettingsForm({ profile }: { profile: Profile }) {
 
       <div className="rounded-xl border border-ink-border bg-ink-raised p-5">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-gold/15 text-gold">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-sand/15 text-sand">
             <Smartphone size={20} />
           </div>
           <div className="min-w-0 flex-1">
@@ -153,12 +153,12 @@ export function SettingsForm({ profile }: { profile: Profile }) {
           <Button type="submit" disabled={isPending}>
             {isPending ? 'Saving…' : 'Save budget'}
           </Button>
-          {saved && <span className="text-sm text-emerald">Saved</span>}
+          {saved && <span className="text-sm text-mint">Saved</span>}
         </div>
       </form>
 
-      <div className="rounded-xl border border-clay/30 bg-clay/5 p-5">
-        <h2 className="text-sm font-semibold text-clay uppercase tracking-wide mb-2">Sign out everywhere</h2>
+      <div className="rounded-xl border border-peach/30 bg-peach/5 p-5">
+        <h2 className="text-sm font-semibold text-peach uppercase tracking-wide mb-2">Sign out everywhere</h2>
         <p className="text-sm text-paper/50 mb-3">This will sign you out of this device.</p>
         <Button
           variant="danger"

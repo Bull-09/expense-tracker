@@ -3,9 +3,9 @@ import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/Card';
 import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 
 const toneConfig = {
-  warning: { icon: AlertTriangle, color: 'text-clay', bg: 'bg-clay/10 border-clay/20' },
-  positive: { icon: CheckCircle2, color: 'text-emerald', bg: 'bg-emerald/10 border-emerald/20' },
-  neutral: { icon: Info, color: 'text-gold', bg: 'bg-gold/10 border-gold/20' },
+  warning: { icon: AlertTriangle, color: 'text-peach', bg: 'bg-peach/10 border-peach/20' },
+  positive: { icon: CheckCircle2, color: 'text-mint', bg: 'bg-mint/10 border-mint/20' },
+  neutral: { icon: Info, color: 'text-sand', bg: 'bg-sand/10 border-sand/20' },
 };
 
 export function InsightsCard({ insights }: { insights: Insight[] }) {

@@ -3,9 +3,9 @@ import { MoneyEstimate } from '@/lib/forecast';
 import { formatCurrency } from '@/lib/utils/format';
 
 const confidenceTone = {
-  low: 'text-gold',
+  low: 'text-sand',
   medium: 'text-paper/60',
-  high: 'text-emerald',
+  high: 'text-mint',
 };
 
 export function EstimateCard({ estimate }: { estimate: MoneyEstimate }) {
@@ -14,25 +14,25 @@ export function EstimateCard({ estimate }: { estimate: MoneyEstimate }) {
       label: 'Month income',
       value: estimate.projectedIncome,
       icon: ArrowUpRight,
-      color: 'text-emerald',
+      color: 'text-mint',
     },
     {
       label: 'Month spend',
       value: estimate.projectedExpense,
       icon: ArrowDownRight,
-      color: 'text-clay',
+      color: 'text-peach',
     },
     {
       label: 'Month invested',
       value: estimate.projectedInvestment,
       icon: PiggyBank,
-      color: 'text-gold',
+      color: 'text-sand',
     },
     {
       label: 'Year net',
       value: estimate.yearlyNet,
       icon: CalendarRange,
-      color: estimate.yearlyNet >= 0 ? 'text-emerald' : 'text-clay',
+      color: estimate.yearlyNet >= 0 ? 'text-mint' : 'text-peach',
     },
   ];
 

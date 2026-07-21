@@ -23,7 +23,7 @@ export function AddTransactionTrigger({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-36 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-emerald text-paper shadow-lg shadow-emerald/30 transition-colors hover:bg-emerald/90 lg:bottom-24 lg:right-8"
+        className="fixed bottom-36 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-mint text-ink shadow-lg shadow-mint/30 transition-colors hover:bg-mint/90 lg:bottom-24 lg:right-8"
         aria-label="Add transaction"
       >
         <Plus size={22} />

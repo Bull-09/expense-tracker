@@ -8,25 +8,25 @@ export function SummaryStrip({ totals }: { totals: DashboardTotals }) {
       label: 'Income this month',
       value: totals.totalIncome,
       icon: TrendingUp,
-      color: 'text-emerald',
+      color: 'text-mint',
     },
     {
       label: 'Expenses this month',
       value: totals.totalExpense,
       icon: TrendingDown,
-      color: 'text-clay',
+      color: 'text-peach',
     },
     {
       label: 'Invested this month',
       value: totals.totalInvestment,
       icon: PiggyBank,
-      color: 'text-gold',
+      color: 'text-sand',
     },
     {
       label: 'Net cashflow',
       value: totals.netCashflow,
       icon: Wallet,
-      color: totals.netCashflow >= 0 ? 'text-emerald' : 'text-clay',
+      color: totals.netCashflow >= 0 ? 'text-mint' : 'text-peach',
     },
   ];
 

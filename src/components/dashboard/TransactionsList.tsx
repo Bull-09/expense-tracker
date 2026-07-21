@@ -11,9 +11,9 @@ import { EditTransactionModal } from './EditTransactionModal';
 import { useOptimisticTransactions } from '@/lib/transactions/optimistic';
 
 const kindConfig: Record<TransactionKind, { icon: typeof ArrowUpRight; color: string; sign: string }> = {
-  income: { icon: ArrowUpRight, color: 'text-emerald', sign: '+' },
-  expense: { icon: ArrowDownRight, color: 'text-clay', sign: '-' },
-  investment: { icon: PiggyBank, color: 'text-gold', sign: '-' },
+  income: { icon: ArrowUpRight, color: 'text-mint', sign: '+' },
+  expense: { icon: ArrowDownRight, color: 'text-peach', sign: '-' },
+  investment: { icon: PiggyBank, color: 'text-sand', sign: '-' },
   transfer: { icon: ArrowLeftRight, color: 'text-sky-300', sign: '' },
 };
 
@@ -108,10 +108,10 @@ const TransactionRow = memo(function TransactionRow({
         <span className={`font-ledger text-sm font-semibold ${config.color}`}>
           {config.sign}{formatCurrency(transaction.amount, transaction.currency)}
         </span>
-        <button onClick={() => onEdit(transaction)} className="text-paper/30 hover:text-emerald p-1" aria-label="Edit transaction">
+        <button onClick={() => onEdit(transaction)} className="text-paper/30 hover:text-mint p-1" aria-label="Edit transaction">
           <Pencil size={15} />
         </button>
-        <button onClick={() => onDelete(transaction.id)} disabled={deleting} className="text-paper/30 hover:text-clay p-1 disabled:opacity-40" aria-label="Delete transaction">
+        <button onClick={() => onDelete(transaction.id)} disabled={deleting} className="text-paper/30 hover:text-peach p-1 disabled:opacity-40" aria-label="Delete transaction">
           <Trash2 size={15} />
         </button>
       </div>
@@ -195,7 +195,7 @@ export function TransactionsList({
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald/10 text-emerald">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-mint/10 text-mint">
                 <CalendarDays size={18} />
               </div>
               <div>
@@ -221,7 +221,7 @@ export function TransactionsList({
                 onClick={() => applyPreset(preset.value)}
                 className={cn(
                   'rounded-full border px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors',
-                  datePreset === preset.value ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/60 hover:text-paper'
+                  datePreset === preset.value ? 'border-mint bg-mint/15 text-mint' : 'border-ink-border text-paper/60 hover:text-paper'
                 )}
               >
                 {preset.label}
@@ -236,7 +236,7 @@ export function TransactionsList({
                 type="date"
                 value={dateFrom}
                 onChange={(event) => updateDateRange({ from: event.target.value })}
-                className="h-11 rounded-lg border border-ink-border bg-ink px-3 text-sm normal-case tracking-normal text-paper outline-none focus:border-emerald"
+                className="h-11 rounded-lg border border-ink-border bg-ink px-3 text-sm normal-case tracking-normal text-paper outline-none focus:border-mint"
               />
             </label>
             <label className="flex flex-col gap-1.5 text-xs font-medium uppercase tracking-wide text-paper/45">
@@ -245,21 +245,21 @@ export function TransactionsList({
                 type="date"
                 value={dateTo}
                 onChange={(event) => updateDateRange({ to: event.target.value })}
-                className="h-11 rounded-lg border border-ink-border bg-ink px-3 text-sm normal-case tracking-normal text-paper outline-none focus:border-emerald"
+                className="h-11 rounded-lg border border-ink-border bg-ink px-3 text-sm normal-case tracking-normal text-paper outline-none focus:border-mint"
               />
             </label>
             <div className="grid grid-cols-3 gap-2 sm:min-w-72">
               <div className="rounded-lg border border-ink-border bg-ink px-3 py-2">
                 <p className="text-[10px] font-semibold uppercase text-paper/35">Income</p>
-                <p className="font-ledger text-sm font-semibold text-emerald">{formatCurrency(rangeTotals.income)}</p>
+                <p className="font-ledger text-sm font-semibold text-mint">{formatCurrency(rangeTotals.income)}</p>
               </div>
               <div className="rounded-lg border border-ink-border bg-ink px-3 py-2">
                 <p className="text-[10px] font-semibold uppercase text-paper/35">Spend</p>
-                <p className="font-ledger text-sm font-semibold text-clay">{formatCurrency(rangeTotals.expense)}</p>
+                <p className="font-ledger text-sm font-semibold text-peach">{formatCurrency(rangeTotals.expense)}</p>
               </div>
               <div className="rounded-lg border border-ink-border bg-ink px-3 py-2">
                 <p className="text-[10px] font-semibold uppercase text-paper/35">Net</p>
-                <p className={cn('font-ledger text-sm font-semibold', rangeTotals.income - rangeTotals.expense - rangeTotals.investment >= 0 ? 'text-emerald' : 'text-clay')}>
+                <p className={cn('font-ledger text-sm font-semibold', rangeTotals.income - rangeTotals.expense - rangeTotals.investment >= 0 ? 'text-mint' : 'text-peach')}>
                   {formatCurrency(rangeTotals.income - rangeTotals.expense - rangeTotals.investment)}
                 </p>
               </div>
@@ -275,7 +275,7 @@ export function TransactionsList({
             onClick={() => setFilter(f.value)}
             className={cn(
               'px-3.5 py-1.5 rounded-full text-sm font-medium border whitespace-nowrap transition-colors',
-              filter === f.value ? 'bg-emerald/15 border-emerald text-emerald' : 'border-ink-border text-paper/60 hover:text-paper'
+              filter === f.value ? 'bg-mint/15 border-mint text-mint' : 'border-ink-border text-paper/60 hover:text-paper'
             )}
           >
             {f.label}

@@ -149,7 +149,7 @@ export function AddTransactionModal({
                 className={cn(
                   'py-2 rounded-lg text-sm font-medium border transition-colors',
                   kind === k
-                    ? 'bg-emerald/15 border-emerald text-emerald'
+                    ? 'bg-mint/15 border-mint text-mint'
                     : 'border-ink-border text-paper/60 hover:text-paper'
                 )}
               >
@@ -195,7 +195,7 @@ export function AddTransactionModal({
                 setCategoryId(e.target.value);
                 if (e.target.value) setCreateCategoryName('');
               }}
-              className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+              className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
             >
               <option value="">Uncategorized</option>
               {relevantCategories.map((c) => (
@@ -203,8 +203,8 @@ export function AddTransactionModal({
               ))}
             </select>
             {!effectiveCategoryId && (
-              <div className="rounded-lg border border-emerald/25 bg-emerald/5 px-3 py-2.5">
-                <p className="text-xs font-medium text-emerald">
+              <div className="rounded-lg border border-mint/25 bg-mint/5 px-3 py-2.5">
+                <p className="text-xs font-medium text-mint">
                   Create a new category while saving
                 </p>
                 <p className="mt-1 text-xs text-paper/50">
@@ -226,7 +226,7 @@ export function AddTransactionModal({
                   <button
                     type="button"
                     onClick={() => setCategoryId(suggestedCategory.id)}
-                    className="mt-2 text-xs font-medium text-emerald"
+                    className="mt-2 text-xs font-medium text-mint"
                   >
                     Use existing &quot;{suggestedCategory.name}&quot;
                   </button>
@@ -246,7 +246,7 @@ export function AddTransactionModal({
                   setSelectedFriends([]);
                   setCustomAmounts({});
                 }}
-                className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
               >
                 <option value="">Personal / no group</option>
                 {groups.map((group) => (
@@ -273,7 +273,7 @@ export function AddTransactionModal({
                 disabled={otherUsers.length === 0}
                 className="flex items-center gap-2 text-sm font-medium text-paper/80 mb-3"
               >
-                {splitEnabled ? <Minus size={16} className="text-emerald" /> : <Plus size={16} className="text-emerald" />}
+                {splitEnabled ? <Minus size={16} className="text-mint" /> : <Plus size={16} className="text-mint" />}
                 Split this expense
               </button>
 
@@ -291,14 +291,14 @@ export function AddTransactionModal({
                     <button
                       type="button"
                       onClick={() => setSplitMode('equal')}
-                      className={cn('py-1.5 rounded-lg text-xs font-medium border', splitMode === 'equal' ? 'bg-emerald/15 border-emerald text-emerald' : 'border-ink-border text-paper/60')}
+                      className={cn('py-1.5 rounded-lg text-xs font-medium border', splitMode === 'equal' ? 'bg-mint/15 border-mint text-mint' : 'border-ink-border text-paper/60')}
                     >
                       Split equally
                     </button>
                     <button
                       type="button"
                       onClick={() => setSplitMode('custom')}
-                      className={cn('py-1.5 rounded-lg text-xs font-medium border', splitMode === 'custom' ? 'bg-emerald/15 border-emerald text-emerald' : 'border-ink-border text-paper/60')}
+                      className={cn('py-1.5 rounded-lg text-xs font-medium border', splitMode === 'custom' ? 'bg-mint/15 border-mint text-mint' : 'border-ink-border text-paper/60')}
                     >
                       Custom amounts
                     </button>
@@ -314,7 +314,7 @@ export function AddTransactionModal({
                             onClick={() => toggleFriend(u.id)}
                             className={cn(
                               'flex items-center gap-2 flex-1 px-2.5 py-2 rounded-lg border text-sm text-left',
-                              selected ? 'border-emerald bg-emerald/10' : 'border-ink-border text-paper/60'
+                              selected ? 'border-mint bg-mint/10' : 'border-ink-border text-paper/60'
                             )}
                           >
                             <div
@@ -359,7 +359,7 @@ export function AddTransactionModal({
           )}
 
           {error && (
-            <div className="rounded-lg bg-clay-soft/10 border border-clay/30 px-3 py-2 text-sm text-clay">
+            <div className="rounded-lg bg-peach/10 border border-peach/30 px-3 py-2 text-sm text-peach">
               {error}
             </div>
           )}

@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Briefcase, Car, Circle, Eye, EyeOff, Film, HeartPulse, Home, Pencil, Plane, Plus, Receipt, ShoppingBag, Trash2, Utensils, X } from 'lucide-react';
 import { deleteCategory, reorderCategory, saveCategory, setCategoryHidden } from '@/app/actions/categories';
 import type { Category, CategoryKind } from '@/lib/types';
 import { cn } from '@/lib/utils/format';
 
-const ICONS = ['utensils', 'car', 'shopping-bag', 'receipt', 'film', 'heart-pulse', 'plane', 'home', 'briefcase', 'circle'];
-const COLORS = ['#A8E6CF', '#FFD3B6', '#F4E4BA', '#B8C0FF', '#FFAAA5', '#FF8B94', '#9EE7E5', '#D8CFBC'];
+const ICONS = { utensils: Utensils, car: Car, 'shopping-bag': ShoppingBag, receipt: Receipt, film: Film, 'heart-pulse': HeartPulse, plane: Plane, home: Home, briefcase: Briefcase, circle: Circle } as const;
+const COLORS = ['#62D99A', '#F2A57E', '#E4C36B', '#B79BCB', '#7FB4C7'];
 
 type Draft = { id?: string; name: string; kind: CategoryKind; icon: string; color: string };
 const EMPTY: Draft = { name: '', kind: 'expense', icon: 'circle', color: COLORS[0] };
@@ -73,9 +73,11 @@ export function CategoriesManager({ initialCategories }: { initialCategories: Ca
       {error && <p role="alert" className="rounded-xl border border-peach/30 bg-peach/10 px-3 py-2 text-sm text-peach">{error}</p>}
 
       <div className="overflow-hidden rounded-2xl border border-ink-border bg-ink-raised">
-        {categories.map((category, index) => (
+        {categories.map((category, index) => {
+          const CategoryIcon = ICONS[category.icon as keyof typeof ICONS] ?? Circle;
+          return (
           <div key={category.id} className={cn('flex items-center gap-3 px-4 py-3', index > 0 && 'border-t border-ink-border', category.is_hidden && 'opacity-45')}>
-            <span className="h-10 w-10 shrink-0 rounded-xl" style={{ backgroundColor: category.color }} aria-hidden="true" />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-ink" style={{ backgroundColor: category.color }} aria-hidden="true"><CategoryIcon size={18} /></span>
             <div className="min-w-0 flex-1"><p className="truncate font-semibold">{category.name}</p><p className="text-xs text-paper/40">{category.kind} · {category.icon}{category.is_default ? ' · default' : ''} · used {category.usage_count ?? 0}×</p></div>
             <div className="flex items-center gap-1">
               <button type="button" disabled={index === 0 || pending} onClick={() => move(category, -1)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-paper/55 disabled:opacity-25" aria-label={`Move ${category.name} up`}><ArrowUp size={15} /></button>
@@ -85,7 +87,8 @@ export function CategoriesManager({ initialCategories }: { initialCategories: Ca
               {!category.is_default && <button type="button" onClick={() => remove(category)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-peach" aria-label={`Delete ${category.name}`}><Trash2 size={15} /></button>}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {draft && (
@@ -94,10 +97,8 @@ export function CategoriesManager({ initialCategories }: { initialCategories: Ca
           <section role="dialog" aria-modal="true" className="relative w-full rounded-t-[28px] border border-ink-border bg-ink-raised p-5 sm:max-w-md sm:rounded-[28px]">
             <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-bold">{draft.id ? 'Edit category' : 'New category'}</h2><button type="button" onClick={() => setDraft(null)} className="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-paper/60"><X size={17} /></button></div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-paper/40">Name<input autoFocus value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className="mt-2 h-11 w-full rounded-xl border border-ink-border bg-ink px-3 text-sm normal-case tracking-normal text-paper outline-none focus:border-mint" /></label>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <label className="text-xs font-semibold uppercase tracking-wider text-paper/40">Type<select value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value as CategoryKind })} className="mt-2 h-11 w-full rounded-xl border border-ink-border bg-ink px-3 text-sm normal-case text-paper"><option value="expense">Expense</option><option value="income">Income</option></select></label>
-              <label className="text-xs font-semibold uppercase tracking-wider text-paper/40">Icon<select value={draft.icon} onChange={(event) => setDraft({ ...draft, icon: event.target.value })} className="mt-2 h-11 w-full rounded-xl border border-ink-border bg-ink px-3 text-sm normal-case text-paper">{ICONS.map((icon) => <option key={icon}>{icon}</option>)}</select></label>
-            </div>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wider text-paper/40">Type<select value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value as CategoryKind })} className="mt-2 h-11 w-full rounded-xl border border-ink-border bg-ink px-3 text-sm normal-case text-paper"><option value="expense">Expense</option><option value="income">Income</option></select></label>
+            <div className="mt-4"><p className="text-xs font-semibold uppercase tracking-wider text-paper/40">Icon</p><div className="mt-2 flex flex-wrap gap-2">{Object.entries(ICONS).map(([name, Icon]) => <button key={name} type="button" onClick={() => setDraft({ ...draft, icon: name })} className={cn('flex h-10 w-10 items-center justify-center rounded-xl border-2 bg-ink text-paper/65', draft.icon === name ? 'border-mint text-mint' : 'border-ink-border')} aria-label={name}><Icon size={18} /></button>)}</div></div>
             <div className="mt-4"><p className="text-xs font-semibold uppercase tracking-wider text-paper/40">Color</p><div className="mt-2 flex flex-wrap gap-2">{COLORS.map((color) => <button key={color} type="button" onClick={() => setDraft({ ...draft, color })} className={cn('h-9 w-9 rounded-full border-2', draft.color === color ? 'border-paper' : 'border-transparent')} style={{ backgroundColor: color }} aria-label={color} />)}</div></div>
             <button type="button" onClick={() => void submit()} className="mt-5 h-12 w-full rounded-xl bg-mint text-sm font-bold text-ink">Save category</button>
           </section>

@@ -547,6 +547,18 @@ export async function settleExpenseSplit(id: string) {
   revalidatePath('/dashboard/groups');
 }
 
+export async function settleExpenseSplits(ids: string[]) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const uniqueIds = [...new Set(ids)].filter(Boolean).slice(0, 200);
+  if (!uniqueIds.length) throw new Error('No matching split shares were found.');
+  const { error } = await supabase.from('expense_splits').update({ is_settled: true, settled_at: new Date().toISOString() }).in('id', uniqueIds);
+  if (error) throw new Error(error.message);
+  revalidatePath('/dashboard/splits');
+  revalidatePath('/dashboard/groups');
+}
+
 export async function updateProfileUpiId(upiId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -556,6 +568,20 @@ export async function updateProfileUpiId(upiId: string) {
   const { error } = await supabase.from('profiles').update({ upi_id: value || null }).eq('id', user.id);
   if (error) throw new Error(error.message);
   revalidatePath('/dashboard/groups');
+}
+
+export async function updateGroupMemberContact(input: { id: string; phone: string; upiId: string }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { data: member } = await supabase.from('group_members').select('group_id').eq('id', input.id).single();
+  if (!member) throw new Error('Group contact not found.');
+  const { data: group } = await supabase.from('groups').select('owner_id').eq('id', member.group_id).single();
+  if (group?.owner_id !== user.id) throw new Error('Only the group owner can edit contact details.');
+  const { error } = await supabase.from('group_members').update({ phone: input.phone.trim() || null, upi_id: input.upiId.trim() || null }).eq('id', input.id);
+  if (error) throw new Error(error.message);
+  revalidatePath('/dashboard/groups');
+  revalidatePath('/dashboard/splits');
 }
 
 export async function deleteTransaction(id: string) {

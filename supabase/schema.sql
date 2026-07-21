@@ -450,14 +450,14 @@ end;
 $$;
 
 insert into public.categories (user_id, name, kind, color, icon, is_default, sort_order) values
-  (null, 'Food', 'expense', '#A8E6CF', 'utensils', true, 10),
-  (null, 'Transport', 'expense', '#FFD3B6', 'car', true, 20),
-  (null, 'Shopping', 'expense', '#F4E4BA', 'shopping-bag', true, 30),
-  (null, 'Bills', 'expense', '#B8C0FF', 'receipt', true, 40),
-  (null, 'Entertainment', 'expense', '#FFAAA5', 'film', true, 50),
-  (null, 'Health', 'expense', '#FF8B94', 'heart-pulse', true, 60),
-  (null, 'Travel', 'expense', '#9EE7E5', 'plane', true, 70),
-  (null, 'Other', 'expense', '#D8CFBC', 'circle', true, 80)
+  (null, 'Food', 'expense', '#62D99A', 'utensils', true, 10),
+  (null, 'Transport', 'expense', '#F2A57E', 'car', true, 20),
+  (null, 'Shopping', 'expense', '#E4C36B', 'shopping-bag', true, 30),
+  (null, 'Bills', 'expense', '#B79BCB', 'receipt', true, 40),
+  (null, 'Entertainment', 'expense', '#F2A57E', 'film', true, 50),
+  (null, 'Health', 'expense', '#F2A57E', 'heart-pulse', true, 60),
+  (null, 'Travel', 'expense', '#7FB4C7', 'plane', true, 70),
+  (null, 'Other', 'expense', '#E4C36B', 'circle', true, 80)
 on conflict do nothing;
 
 create or replace function public.bump_category_usage()

@@ -28,7 +28,7 @@ export default async function GroupsPage() {
         currentUserId={profile.id}
         currentUpiId={profile.upi_id}
       />
-      <div><h2 className="mb-3 text-lg font-bold">Group balances</h2><GroupBalances groups={groups} splits={expenseSplits} /></div>
+      <div><h2 className="mb-3 text-lg font-bold">Group balances</h2><GroupBalances groups={groups} splits={expenseSplits} currentUserId={profile.id} /></div>
     </div>
   );
 }

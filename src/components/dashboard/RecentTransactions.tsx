@@ -9,9 +9,9 @@ import { ArrowLeftRight, ArrowUpRight, ArrowDownRight, PiggyBank } from 'lucide-
 import { useOptimisticTransactions } from '@/lib/transactions/optimistic';
 
 const kindConfig = {
-  income: { icon: ArrowUpRight, color: 'text-emerald', sign: '+' },
-  expense: { icon: ArrowDownRight, color: 'text-clay', sign: '-' },
-  investment: { icon: PiggyBank, color: 'text-gold', sign: '-' },
+  income: { icon: ArrowUpRight, color: 'text-mint', sign: '+' },
+  expense: { icon: ArrowDownRight, color: 'text-peach', sign: '-' },
+  investment: { icon: PiggyBank, color: 'text-sand', sign: '-' },
   transfer: { icon: ArrowLeftRight, color: 'text-sky-300', sign: '' },
 };
 
@@ -23,7 +23,7 @@ export function RecentTransactions({ transactions }: { transactions: Transaction
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Recent activity</CardTitle>
-        <Link href="/dashboard/transactions" className="text-xs text-emerald font-medium hover:underline">
+        <Link href="/dashboard/transactions" className="text-xs text-mint font-medium hover:underline">
           View all
         </Link>
       </CardHeader>

@@ -29,14 +29,14 @@ create policy "Authenticated users delete categories" on public.categories
 insert into public.categories
   (user_id, name, kind, icon, color, is_default, sort_order)
 values
-  (null, 'Food',          'expense', 'utensils',     '#A8E6CF', true, 10),
-  (null, 'Transport',     'expense', 'car',          '#FFD3B6', true, 20),
-  (null, 'Shopping',      'expense', 'shopping-bag', '#F4E4BA', true, 30),
-  (null, 'Bills',         'expense', 'receipt',      '#B8C0FF', true, 40),
-  (null, 'Entertainment', 'expense', 'film',         '#FFAAA5', true, 50),
-  (null, 'Health',        'expense', 'heart-pulse',  '#FF8B94', true, 60),
-  (null, 'Travel',        'expense', 'plane',        '#9EE7E5', true, 70),
-  (null, 'Other',         'expense', 'circle',       '#D8CFBC', true, 80)
+  (null, 'Food',          'expense', 'utensils',     '#62D99A', true, 10),
+  (null, 'Transport',     'expense', 'car',          '#F2A57E', true, 20),
+  (null, 'Shopping',      'expense', 'shopping-bag', '#E4C36B', true, 30),
+  (null, 'Bills',         'expense', 'receipt',      '#B79BCB', true, 40),
+  (null, 'Entertainment', 'expense', 'film',         '#F2A57E', true, 50),
+  (null, 'Health',        'expense', 'heart-pulse',  '#F2A57E', true, 60),
+  (null, 'Travel',        'expense', 'plane',        '#7FB4C7', true, 70),
+  (null, 'Other',         'expense', 'circle',       '#E4C36B', true, 80)
 on conflict do nothing;
 
 create table if not exists public.merchant_rules (

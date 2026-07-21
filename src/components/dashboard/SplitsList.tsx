@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import type { FormEvent } from 'react';
-import { DirectoryUser, SplitShare } from '@/lib/types';
+import { DirectoryUser, Group, SplitShare } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
 import { format } from 'date-fns';
 import { Bell, CheckCircle2, Check, Copy, HandCoins, Share2, UserPlus } from 'lucide-react';
@@ -10,15 +10,18 @@ import { createFriendLedgerEntry, recordSplitReminder, settleSplitShare } from '
 import { cn } from '@/lib/utils/format';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { whatsappReminderLink } from '@/lib/splits/simplify';
 
 export function SplitsList({
   splitShares,
   currentUserId,
   directory,
+  groups,
 }: {
   splitShares: SplitShare[];
   currentUserId: string;
   directory: DirectoryUser[];
+  groups: Group[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [settlingId, setSettlingId] = useState<string | null>(null);
@@ -129,10 +132,10 @@ export function SplitsList({
   }
 
   const splitForm = (
-    <form onSubmit={handleCreateSplit} className="rounded-xl border border-emerald/30 bg-emerald/5 p-4">
+    <form onSubmit={handleCreateSplit} className="rounded-xl border border-mint/30 bg-mint/5 p-4">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald/15 text-emerald">
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-mint/15 text-mint">
             <HandCoins size={18} />
           </span>
           <div>
@@ -143,7 +146,7 @@ export function SplitsList({
         <button
           type="button"
           onClick={handleInvite}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-ink-border px-3 py-2 text-sm font-medium text-paper/60 hover:border-emerald/40 hover:text-emerald"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-ink-border px-3 py-2 text-sm font-medium text-paper/60 hover:border-mint/40 hover:text-mint"
         >
           {copied ? <Check size={15} /> : hasNativeShare ? <Share2 size={15} /> : <Copy size={15} />}
           {copied ? 'Copied invite' : 'Invite'}
@@ -156,7 +159,7 @@ export function SplitsList({
           <select
             value={direction}
             onChange={(event) => setDirection(event.target.value as 'lent' | 'borrowed')}
-            className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+            className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
           >
             <option value="lent">I paid / lent money, they owe me</option>
             <option value="borrowed">They paid / lent money, I owe them</option>
@@ -172,7 +175,7 @@ export function SplitsList({
               setPersonId(event.target.value);
               if (event.target.value) setPersonName('');
             }}
-            className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+            className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
           >
             <option value="">Add new friend</option>
             {friends.map((person) => (
@@ -210,7 +213,7 @@ export function SplitsList({
       <div className="flex flex-col gap-4">
         {splitForm}
         {notice && (
-          <div className="rounded-lg border border-emerald/30 bg-emerald/10 px-3 py-2 text-sm text-emerald">
+          <div className="rounded-lg border border-mint/30 bg-mint/10 px-3 py-2 text-sm text-mint">
             {notice}
           </div>
         )}
@@ -235,7 +238,7 @@ export function SplitsList({
       </button>
 
       {notice && (
-        <div className="rounded-lg border border-emerald/30 bg-emerald/10 px-3 py-2 text-sm text-emerald">
+        <div className="rounded-lg border border-mint/30 bg-mint/10 px-3 py-2 text-sm text-mint">
           {notice}
         </div>
       )}
@@ -246,6 +249,8 @@ export function SplitsList({
           const otherPerson = youArePayer ? s.owed_by : s.payer;
           const settling = isPending && settlingId === s.id;
           const reminding = isPending && remindingId === s.id;
+          const contact = groups.flatMap((group) => group.members ?? []).find((member) => member.user_id === otherPerson?.id);
+          const reminderHref = contact?.phone ? whatsappReminderLink(contact.phone, s.amount, s.transaction?.description || 'a shared expense') : null;
 
           return (
             <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
@@ -268,25 +273,29 @@ export function SplitsList({
                 </div>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
-                <span className={cn('font-ledger text-sm font-semibold', youArePayer ? 'text-emerald' : 'text-clay', s.settled && 'opacity-40 line-through')}>
+                <span className={cn('font-ledger text-sm font-semibold', youArePayer ? 'text-mint' : 'text-peach', s.settled && 'opacity-40 line-through')}>
                   {formatCurrency(s.amount)}
                 </span>
                 {!s.settled && (
                   <>
                     {youArePayer && (
-                      <button
-                        onClick={() => handleRemind(s.id)}
-                        disabled={reminding}
-                        className="flex items-center gap-1 rounded-lg border border-ink-border px-2.5 py-1.5 text-xs font-medium text-paper/50 hover:border-gold/40 hover:text-gold disabled:opacity-40"
+                      <a
+                        href={reminderHref ?? undefined}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(event) => { if (!reminderHref) event.preventDefault(); else handleRemind(s.id); }}
+                        aria-disabled={!reminderHref || reminding}
+                        title={reminderHref ? 'Send WhatsApp reminder' : 'Add their phone number in the group to enable WhatsApp reminders.'}
+                        className="flex items-center gap-1 rounded-lg border border-ink-border px-2.5 py-1.5 text-xs font-medium text-paper/50 hover:border-sand/40 hover:text-sand disabled:opacity-40"
                       >
                         <Bell size={14} />
                         {reminding ? 'Saving...' : 'Remind'}
-                      </button>
+                      </a>
                     )}
                     <button
                       onClick={() => handleSettle(s.id)}
                       disabled={settling}
-                      className="flex items-center gap-1 text-xs font-medium text-paper/50 hover:text-emerald disabled:opacity-40 border border-ink-border hover:border-emerald/40 rounded-lg px-2.5 py-1.5"
+                      className="flex items-center gap-1 text-xs font-medium text-paper/50 hover:text-mint disabled:opacity-40 border border-ink-border hover:border-mint/40 rounded-lg px-2.5 py-1.5"
                     >
                       <CheckCircle2 size={14} />
                       {settling ? 'Settling...' : 'Settle'}

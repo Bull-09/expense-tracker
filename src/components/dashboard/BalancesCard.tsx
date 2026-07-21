@@ -14,13 +14,13 @@ export function BalancesCard({ balances, totalOwedToYou, totalYouOwe }: {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="rounded-lg bg-emerald/10 border border-emerald/20 p-3">
+          <div className="rounded-lg bg-mint/10 border border-mint/20 p-3">
             <p className="text-xs text-paper/50 mb-1">Owed to you</p>
-            <p className="font-ledger text-lg font-bold text-emerald">{formatCurrency(totalOwedToYou)}</p>
+            <p className="font-ledger text-lg font-bold text-mint">{formatCurrency(totalOwedToYou)}</p>
           </div>
-          <div className="rounded-lg bg-clay/10 border border-clay/20 p-3">
+          <div className="rounded-lg bg-peach/10 border border-peach/20 p-3">
             <p className="text-xs text-paper/50 mb-1">You owe</p>
-            <p className="font-ledger text-lg font-bold text-clay">{formatCurrency(totalYouOwe)}</p>
+            <p className="font-ledger text-lg font-bold text-peach">{formatCurrency(totalYouOwe)}</p>
           </div>
         </div>
 
@@ -41,7 +41,7 @@ export function BalancesCard({ balances, totalOwedToYou, totalYouOwe }: {
                   </div>
                   <span className="text-sm font-medium">{b.fullName}</span>
                 </div>
-                <span className={`font-ledger text-sm font-semibold ${b.net >= 0 ? 'text-emerald' : 'text-clay'}`}>
+                <span className={`font-ledger text-sm font-semibold ${b.net >= 0 ? 'text-mint' : 'text-peach'}`}>
                   {b.net >= 0 ? `owes you ${formatCurrency(b.net)}` : `you owe ${formatCurrency(Math.abs(b.net))}`}
                 </span>
               </div>

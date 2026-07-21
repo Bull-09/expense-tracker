@@ -54,7 +54,7 @@ export function SignupForm() {
         <p className="text-paper/60 text-sm">
           We sent a confirmation link to {email}. Click it, then come back and sign in.
         </p>
-        <Link href="/login" className="text-emerald font-medium hover:underline text-sm">
+        <Link href="/login" className="text-mint font-medium hover:underline text-sm">
           Back to sign in
         </Link>
       </div>
@@ -95,7 +95,7 @@ export function SignupForm() {
         autoComplete="new-password"
       />
       {error && (
-        <div className="rounded-lg bg-clay-soft/10 border border-clay/30 px-3 py-2 text-sm text-clay">
+        <div className="rounded-lg bg-peach/10 border border-peach/30 px-3 py-2 text-sm text-peach">
           {error}
         </div>
       )}
@@ -104,7 +104,7 @@ export function SignupForm() {
       </Button>
       <p className="text-sm text-paper/50 text-center">
         Already have an account?{' '}
-        <Link href="/login" className="text-emerald font-medium hover:underline">
+        <Link href="/login" className="text-mint font-medium hover:underline">
           Sign in
         </Link>
       </p>

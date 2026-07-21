@@ -19,17 +19,17 @@ export function SubscriptionBurnCard({ subscriptions }: { subscriptions: Subscri
           <h2 className="font-semibold">Subscriptions</h2>
           <p className="mt-1 text-sm text-paper/45">Recurring money that will hit your month.</p>
         </div>
-        <Repeat2 size={18} className="text-emerald" />
+        <Repeat2 size={18} className="text-mint" />
       </div>
 
       <div className="rounded-lg border border-ink-border bg-ink p-3">
         <p className="text-xs font-medium uppercase text-paper/40">Monthly burn</p>
-        <p className="mt-1 font-ledger text-2xl font-bold text-clay">{formatCurrency(monthlyTotal)}</p>
+        <p className="mt-1 font-ledger text-2xl font-bold text-peach">{formatCurrency(monthlyTotal)}</p>
       </div>
 
       {next ? (
         <div className="mt-3 flex items-center gap-2 rounded-lg border border-ink-border bg-ink px-3 py-2 text-sm text-paper/65">
-          <CalendarClock size={15} className="text-gold" />
+          <CalendarClock size={15} className="text-sand" />
           <span className="truncate">
             Next: {next.name} on {format(new Date(next.next_due_on), 'MMM d')}
           </span>
@@ -38,7 +38,7 @@ export function SubscriptionBurnCard({ subscriptions }: { subscriptions: Subscri
         <p className="mt-3 text-sm text-paper/40">Add Netflix, gym, iCloud, EMIs, or any recurring payment.</p>
       )}
 
-      <Link href="/dashboard/subscriptions" className="mt-4 inline-flex text-sm font-medium text-emerald hover:text-emerald/80">
+      <Link href="/dashboard/subscriptions" className="mt-4 inline-flex text-sm font-medium text-mint hover:text-mint/80">
         Manage subscriptions
       </Link>
     </section>

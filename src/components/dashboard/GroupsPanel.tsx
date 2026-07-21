@@ -1,14 +1,23 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Check, Plus, Users } from 'lucide-react';
+import Link from 'next/link';
+import { Check, Phone, Plus, Users, WalletCards } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { createGroup, updateProfileUpiId } from '@/app/actions/transactions';
+import { createGroup, updateGroupMemberContact, updateProfileUpiId } from '@/app/actions/transactions';
 import { cn } from '@/lib/utils/format';
-import { DirectoryUser, Group } from '@/lib/types';
+import { DirectoryUser, Group, GroupMember } from '@/lib/types';
 
 const EMOJI_OPTIONS = ['💸', '🏠', '✈️', '🍜', '🎉', '🎮', '🎓', '💪'];
+
+function ContactMethodEditor({ member }: { member: GroupMember }) {
+  const [phone, setPhone] = useState(member.phone ?? '');
+  const [upiId, setUpiId] = useState(member.upi_id ?? '');
+  const [pending, startTransition] = useTransition();
+  if (!member.id) return null;
+  return <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Phone for WhatsApp" className="h-9 rounded-lg border border-ink-border bg-ink px-2.5 text-xs" /><input value={upiId} onChange={(event) => setUpiId(event.target.value)} placeholder="UPI ID" className="h-9 rounded-lg border border-ink-border bg-ink px-2.5 text-xs" /><button disabled={pending} onClick={() => startTransition(() => updateGroupMemberContact({ id: member.id!, phone, upiId }))} className="rounded-lg bg-mint px-3 text-xs font-bold text-ink disabled:opacity-40">Save</button></div>;
+}
 
 export function GroupsPanel({
   groups,
@@ -70,7 +79,7 @@ export function GroupsPanel({
       <div className="flex flex-col gap-4">
         {groups.length === 0 ? (
           <div className="rounded-xl border border-ink-border bg-ink-raised p-6 text-center">
-            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-emerald/15 text-emerald">
+            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-mint/15 text-mint">
               <Users size={22} />
             </div>
             <h2 className="font-semibold">No groups yet</h2>
@@ -108,6 +117,11 @@ export function GroupsPanel({
                   </div>
                 ))}
               </div>
+              <div className="mt-4 flex items-center justify-between border-t border-ink-border pt-3">
+                <div className="flex gap-2 text-paper/35">{group.members?.filter((member) => !member.user_id).map((member) => <span key={member.id} className="flex items-center gap-1 text-[11px]" title={`${member.contact_name}: ${member.phone ? 'phone saved' : 'phone missing'}, ${member.upi_id ? 'UPI saved' : 'UPI missing'}`}><Phone size={12} className={member.phone ? 'text-mint' : 'text-peach'} /><WalletCards size={12} className={member.upi_id ? 'text-mint' : 'text-peach'} /></span>)}</div>
+                <Link href={`/dashboard/splits#group-${group.id}`} className="text-xs font-bold text-mint">View balances →</Link>
+              </div>
+              {group.owner_id === currentUserId && group.members?.some((member) => !member.user_id) && <details className="mt-3"><summary className="cursor-pointer text-xs font-semibold text-paper/40">Edit contact payment details</summary>{group.members.filter((member) => !member.user_id).map((member) => <div key={member.id} className="mt-2 rounded-xl border border-ink-border bg-ink p-3"><p className="text-xs font-semibold">{member.contact_name}</p><ContactMethodEditor member={member} /></div>)}</details>}
             </div>
           ))
         )}
@@ -116,7 +130,7 @@ export function GroupsPanel({
       <form onSubmit={handleSubmit} className="rounded-xl border border-ink-border bg-ink-raised p-5 h-fit">
         <div className="mb-4 rounded-xl border border-mint/20 bg-mint/5 p-3"><label className="text-xs font-semibold uppercase tracking-wider text-paper/45">Your UPI ID</label><div className="mt-2 flex gap-2"><input value={myUpiId} onChange={(event) => setMyUpiId(event.target.value)} placeholder="name@bank" className="h-10 min-w-0 flex-1 rounded-lg border border-ink-border bg-ink px-3 text-sm" /><button type="button" onClick={() => startTransition(() => updateProfileUpiId(myUpiId))} className="rounded-lg bg-mint px-3 text-xs font-bold text-ink">Save</button></div></div>
         <div className="mb-5 flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald/15 text-emerald">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-mint/15 text-mint">
             <Plus size={18} />
           </div>
 
@@ -146,7 +160,7 @@ export function GroupsPanel({
                   onClick={() => setEmoji(option)}
                   className={cn(
                     'h-10 rounded-lg border text-lg transition-colors',
-                    emoji === option ? 'border-emerald bg-emerald/15' : 'border-ink-border bg-ink'
+                    emoji === option ? 'border-mint bg-mint/15' : 'border-ink-border bg-ink'
                   )}
                 >
                   {option}
@@ -172,7 +186,7 @@ export function GroupsPanel({
                       onClick={() => toggleMember(user.id)}
                       className={cn(
                         'flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-colors',
-                        selected ? 'border-emerald bg-emerald/10' : 'border-ink-border bg-ink'
+                        selected ? 'border-mint bg-mint/10' : 'border-ink-border bg-ink'
                       )}
                     >
                       <span className="flex min-w-0 items-center gap-2">
@@ -184,7 +198,7 @@ export function GroupsPanel({
                         </span>
                         <span className="truncate text-sm">{user.full_name}</span>
                       </span>
-                      {selected && <Check size={16} className="text-emerald" />}
+                      {selected && <Check size={16} className="text-mint" />}
                     </button>
                   );
                 })}
@@ -204,11 +218,11 @@ export function GroupsPanel({
           </div>
 
           {error && (
-            <div className="rounded-lg border border-clay/30 bg-clay-soft/10 px-3 py-2 text-sm text-clay">
+            <div className="rounded-lg border border-peach/30 bg-peach/10 px-3 py-2 text-sm text-peach">
               {error}
             </div>
           )}
-          {created && <p className="text-sm text-emerald">Group created</p>}
+          {created && <p className="text-sm text-mint">Group created</p>}
 
           <Button type="submit" disabled={isPending}>
             {isPending ? 'Creating...' : 'Create group'}

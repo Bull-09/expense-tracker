@@ -934,7 +934,7 @@ export function AiQuickAddModal({
           className="flex items-center justify-between gap-3 border-b border-ink-border px-4 py-2.5 text-left"
         >
           <span className="flex min-w-0 items-center gap-2">
-            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-emerald/15 text-emerald">
+            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-mint/15 text-mint">
               <Bot size={17} />
             </span>
             <span className="min-w-0">
@@ -954,7 +954,7 @@ export function AiQuickAddModal({
                   className={cn(
                     'max-w-[85%] rounded-2xl px-3 py-2 text-sm',
                     item.role === 'user'
-                      ? 'ml-auto bg-emerald text-paper'
+                      ? 'ml-auto bg-mint text-ink'
                       : 'mr-auto bg-ink text-paper/75'
                   )}
                 >
@@ -976,7 +976,7 @@ export function AiQuickAddModal({
                   <button
                     type="button"
                     onClick={stopAiResponse}
-                    className="ml-1 rounded-full border border-clay/40 px-2 py-0.5 text-xs font-semibold text-clay hover:bg-clay/10"
+                    className="ml-1 rounded-full border border-peach/40 px-2 py-0.5 text-xs font-semibold text-peach hover:bg-peach/10"
                   >
                     Stop
                   </button>
@@ -986,8 +986,8 @@ export function AiQuickAddModal({
             </div>
 
             {followUpQuestions.length > 0 && (
-              <div className="mb-3 rounded-xl border border-gold/30 bg-gold/10 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gold">Needs one detail</p>
+              <div className="mb-3 rounded-xl border border-sand/30 bg-sand/10 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-sand">Needs one detail</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {followUpQuestions.map((question) => (
                     <button
@@ -998,7 +998,7 @@ export function AiQuickAddModal({
                         setMessage((current) => current || '');
                         textareaRef.current?.focus();
                       }}
-                      className="rounded-full border border-gold/30 bg-ink/70 px-3 py-1.5 text-xs font-medium text-paper/75"
+                      className="rounded-full border border-sand/30 bg-ink/70 px-3 py-1.5 text-xs font-medium text-paper/75"
                     >
                       {question}
                     </button>
@@ -1035,7 +1035,7 @@ export function AiQuickAddModal({
                           <button
                             type="button"
                             onClick={() => removeActionPlan(index)}
-                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-ink-border text-paper/50 hover:text-clay"
+                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-ink-border text-paper/50 hover:text-peach"
                             aria-label={`Dismiss ${plan.title}`}
                             disabled={saving}
                           >
@@ -1044,7 +1044,7 @@ export function AiQuickAddModal({
                           <button
                             type="button"
                             onClick={() => void applyActionPlan(index)}
-                            className="flex h-9 items-center gap-1 rounded-lg bg-emerald px-3 text-sm font-semibold text-paper hover:bg-emerald/90 disabled:opacity-50"
+                            className="flex h-9 items-center gap-1 rounded-lg bg-mint px-3 text-sm font-semibold text-paper hover:bg-mint/90 disabled:opacity-50"
                             disabled={saving}
                           >
                             {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
@@ -1060,7 +1060,7 @@ export function AiQuickAddModal({
 
             {(drafts.length > 0 || subscriptionDrafts.length > 0 || friendLedgerDrafts.length > 0)
               && [drafts.length, subscriptionDrafts.length, friendLedgerDrafts.length].filter(Boolean).length > 1 && (
-              <div className="mb-3 rounded-xl border border-emerald/30 bg-emerald/5 p-3">
+              <div className="mb-3 rounded-xl border border-mint/30 bg-mint/5 p-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-paper/70">
                     Found {[
@@ -1077,14 +1077,14 @@ export function AiQuickAddModal({
             )}
 
             {drafts.length > 0 && draft && (
-              <div className="mb-3 rounded-xl border border-emerald/30 bg-emerald/5 p-3">
+              <div className="mb-3 rounded-xl border border-mint/30 bg-mint/5 p-3">
                 <div className="mb-3 flex flex-wrap gap-2">
                   {drafts.map((item, index) => (
                     <span
                       key={index}
                       className={cn(
                         'inline-flex items-center overflow-hidden rounded-full border text-xs font-medium',
-                        selectedDraft === index ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/50'
+                        selectedDraft === index ? 'border-mint bg-mint/15 text-mint' : 'border-ink-border text-paper/50'
                       )}
                     >
                       <button
@@ -1097,7 +1097,7 @@ export function AiQuickAddModal({
                       <button
                         type="button"
                         onClick={() => removeDraft(index)}
-                        className="border-l border-current/15 px-2 py-1 text-current/70 hover:text-clay"
+                        className="border-l border-current/15 px-2 py-1 text-current/70 hover:text-peach"
                         aria-label={`Delete draft ${index + 1}`}
                       >
                         <X size={12} />
@@ -1117,7 +1117,7 @@ export function AiQuickAddModal({
                         createCategoryName: null,
                         split: event.target.value === 'expense' ? draft.split : { enabled: false, mode: 'equal', peopleIds: [] },
                       })}
-                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
                     >
                       {(Object.keys(KIND_LABELS) as MoneyEntryKind[]).map((kind) => (
                         <option key={kind} value={kind}>{KIND_LABELS[kind]}</option>
@@ -1140,7 +1140,7 @@ export function AiQuickAddModal({
                         categoryId: event.target.value || null,
                         createCategoryName: event.target.value ? null : draft.createCategoryName,
                       })}
-                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
                     >
                       <option value="">Uncategorized</option>
                       {relevantCategories.map((category) => (
@@ -1165,7 +1165,7 @@ export function AiQuickAddModal({
                       <button
                         type="button"
                         onClick={() => updateDraft({ createCategoryName: draft.suggestedCategoryName })}
-                        className="self-start text-xs font-medium text-emerald"
+                        className="self-start text-xs font-medium text-mint"
                       >
                         Use &quot;{draft.suggestedCategoryName}&quot;
                       </button>
@@ -1178,7 +1178,7 @@ export function AiQuickAddModal({
                       <select
                         value={draft.groupId ?? ''}
                         onChange={(event) => updateDraft({ groupId: event.target.value || null })}
-                        className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                        className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
                       >
                         <option value="">Personal / no group</option>
                         {groups.map((group) => (
@@ -1193,7 +1193,7 @@ export function AiQuickAddModal({
                   <div className="mt-3 border-t border-ink-border pt-3">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-medium text-paper/70">Split settings</p>
-                      <button type="button" onClick={() => updateSplit({ enabled: !draft.split?.enabled })} className="text-xs font-medium text-emerald">
+                      <button type="button" onClick={() => updateSplit({ enabled: !draft.split?.enabled })} className="text-xs font-medium text-mint">
                         {draft.split?.enabled ? 'Turn off split' : 'Split this'}
                       </button>
                     </div>
@@ -1206,10 +1206,10 @@ export function AiQuickAddModal({
                               key={person.id}
                               type="button"
                               onClick={() => togglePerson(person.id)}
-                              className={cn('flex items-center justify-between rounded-lg border px-3 py-2 text-sm', selected ? 'border-emerald bg-emerald/10' : 'border-ink-border bg-ink')}
+                              className={cn('flex items-center justify-between rounded-lg border px-3 py-2 text-sm', selected ? 'border-mint bg-mint/10' : 'border-ink-border bg-ink')}
                             >
                               <span className="truncate">{person.full_name}</span>
-                              {selected && <Check size={16} className="text-emerald" />}
+                              {selected && <Check size={16} className="text-mint" />}
                             </button>
                           );
                         })}
@@ -1219,7 +1219,7 @@ export function AiQuickAddModal({
                 )}
 
                 {draft.questions && draft.questions.length > 0 && (
-                  <p className="mt-3 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-sm text-paper/70">
+                  <p className="mt-3 rounded-lg border border-sand/30 bg-sand/10 px-3 py-2 text-sm text-paper/70">
                     {draft.questions.join(' ')}
                   </p>
                 )}
@@ -1231,10 +1231,10 @@ export function AiQuickAddModal({
             )}
 
             {friendLedgerDrafts.length > 0 && friendDraft && (
-              <div className="mb-3 rounded-xl border border-emerald/30 bg-emerald/5 p-3">
+              <div className="mb-3 rounded-xl border border-mint/30 bg-mint/5 p-3">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald/15 text-emerald">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-mint/15 text-mint">
                       <HandCoins size={16} />
                     </span>
                     <div>
@@ -1250,7 +1250,7 @@ export function AiQuickAddModal({
                       key={index}
                       className={cn(
                         'inline-flex items-center overflow-hidden rounded-full border text-xs font-medium',
-                        selectedFriendDraft === index ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/50'
+                        selectedFriendDraft === index ? 'border-mint bg-mint/15 text-mint' : 'border-ink-border text-paper/50'
                       )}
                     >
                       <button
@@ -1263,7 +1263,7 @@ export function AiQuickAddModal({
                       <button
                         type="button"
                         onClick={() => removeFriendDraft(index)}
-                        className="border-l border-current/15 px-2 py-1 text-current/70 hover:text-clay"
+                        className="border-l border-current/15 px-2 py-1 text-current/70 hover:text-peach"
                         aria-label={`Delete friend draft ${index + 1}`}
                       >
                         <X size={12} />
@@ -1278,7 +1278,7 @@ export function AiQuickAddModal({
                     <select
                       value={friendDraft.direction}
                       onChange={(event) => updateFriendDraft({ direction: event.target.value as FriendLedgerDraft['direction'] })}
-                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
                     >
                       <option value="borrowed">I borrowed from this person</option>
                       <option value="lent">I lent to this person</option>
@@ -1299,7 +1299,7 @@ export function AiQuickAddModal({
                           personName: selected?.full_name ?? friendDraft.personName ?? null,
                         });
                       }}
-                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
                     >
                       <option value="">
                         {friendDraft.personName ? `Create ${friendDraft.personName} on save` : 'Pick existing friend'}
@@ -1322,7 +1322,7 @@ export function AiQuickAddModal({
                 </div>
 
                 {friendDraft.questions && friendDraft.questions.length > 0 && (
-                  <p className="mt-3 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-sm text-paper/70">
+                  <p className="mt-3 rounded-lg border border-sand/30 bg-sand/10 px-3 py-2 text-sm text-paper/70">
                     {friendDraft.questions.join(' ')}
                   </p>
                 )}
@@ -1334,10 +1334,10 @@ export function AiQuickAddModal({
             )}
 
             {subscriptionDrafts.length > 0 && subscriptionDraft && (
-              <div className="mb-3 rounded-xl border border-gold/30 bg-gold/10 p-3">
+              <div className="mb-3 rounded-xl border border-sand/30 bg-sand/10 p-3">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold/15 text-gold">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sand/15 text-sand">
                       <Repeat2 size={16} />
                     </span>
                     <div>
@@ -1354,7 +1354,7 @@ export function AiQuickAddModal({
                       key={index}
                       className={cn(
                         'inline-flex items-center overflow-hidden rounded-full border text-xs font-medium',
-                        selectedSubscriptionDraft === index ? 'border-gold bg-gold/15 text-gold' : 'border-ink-border text-paper/50'
+                        selectedSubscriptionDraft === index ? 'border-sand bg-sand/15 text-sand' : 'border-ink-border text-paper/50'
                       )}
                     >
                       <button
@@ -1367,7 +1367,7 @@ export function AiQuickAddModal({
                       <button
                         type="button"
                         onClick={() => removeSubscriptionDraft(index)}
-                        className="border-l border-current/15 px-2 py-1 text-current/70 hover:text-clay"
+                        className="border-l border-current/15 px-2 py-1 text-current/70 hover:text-peach"
                         aria-label={`Delete subscription draft ${index + 1}`}
                       >
                         <X size={12} />
@@ -1385,7 +1385,7 @@ export function AiQuickAddModal({
                     <select
                       value={subscriptionDraft.frequency}
                       onChange={(event) => updateSubscriptionDraft({ frequency: event.target.value as SubscriptionDraft['frequency'] })}
-                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
                     >
                       <option value="monthly">Monthly</option>
                       <option value="weekly">Weekly</option>
@@ -1398,7 +1398,7 @@ export function AiQuickAddModal({
                     <select
                       value={subscriptionDraft.categoryId ?? ''}
                       onChange={(event) => updateSubscriptionDraft({ categoryId: event.target.value || null })}
-                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                      className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
                     >
                       <option value="">Auto category</option>
                       {expenseCategories.map((category) => (
@@ -1413,7 +1413,7 @@ export function AiQuickAddModal({
                       <select
                         value={subscriptionDraft.groupId ?? ''}
                         onChange={(event) => updateSubscriptionDraft({ groupId: event.target.value || null })}
-                        className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                        className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
                       >
                         <option value="">Personal</option>
                         {groups.map((group) => (
@@ -1426,7 +1426,7 @@ export function AiQuickAddModal({
                 </div>
 
                 {subscriptionDraft.questions && subscriptionDraft.questions.length > 0 && (
-                  <p className="mt-3 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-sm text-paper/70">
+                  <p className="mt-3 rounded-lg border border-sand/30 bg-sand/10 px-3 py-2 text-sm text-paper/70">
                     {subscriptionDraft.questions.join(' ')}
                   </p>
                 )}
@@ -1438,7 +1438,7 @@ export function AiQuickAddModal({
             )}
 
             {error && (
-              <div className="mb-3 rounded-lg border border-clay/30 bg-clay-soft/10 px-3 py-2 text-sm text-clay">
+              <div className="mb-3 rounded-lg border border-peach/30 bg-peach/10 px-3 py-2 text-sm text-peach">
                 {error}
               </div>
             )}
@@ -1453,22 +1453,22 @@ export function AiQuickAddModal({
           className="flex flex-col gap-2 p-3"
         >
           {voiceMode !== 'idle' && (
-            <div className="rounded-xl border border-emerald/20 bg-emerald/10 px-3 py-2">
+            <div className="rounded-xl border border-mint/20 bg-mint/10 px-3 py-2">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-emerald">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-mint">
                   {voiceMode === 'transcribing' ? (
                     <Loader2 size={17} className="animate-spin" />
                   ) : (
                     <div className="flex h-5 items-end gap-0.5" aria-hidden="true">
-                      <span className="h-2 w-1 rounded-full bg-emerald animate-pulse" />
-                      <span className="h-4 w-1 rounded-full bg-emerald animate-pulse [animation-delay:120ms]" />
-                      <span className="h-3 w-1 rounded-full bg-emerald animate-pulse [animation-delay:240ms]" />
-                      <span className="h-5 w-1 rounded-full bg-emerald animate-pulse [animation-delay:360ms]" />
+                      <span className="h-2 w-1 rounded-full bg-mint animate-pulse" />
+                      <span className="h-4 w-1 rounded-full bg-mint animate-pulse [animation-delay:120ms]" />
+                      <span className="h-3 w-1 rounded-full bg-mint animate-pulse [animation-delay:240ms]" />
+                      <span className="h-5 w-1 rounded-full bg-mint animate-pulse [animation-delay:360ms]" />
                     </div>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-mint">
                     {voiceMode === 'transcribing' ? 'Correcting voice note' : 'Listening live'}
                   </p>
                   <p className="mt-0.5 truncate text-sm text-paper/75">
@@ -1494,14 +1494,14 @@ export function AiQuickAddModal({
               onChange={(event) => setMessage(event.target.value)}
               placeholder={voiceMode === 'recording' ? 'Listening...' : 'Ask or add: spent 250 on chai...'}
               rows={1}
-              className="max-h-28 min-h-11 flex-1 resize-none rounded-xl border border-ink-border bg-ink px-3 py-2.5 text-sm text-paper placeholder:text-paper/30 focus:border-emerald/60 focus:outline-none focus:ring-2 focus:ring-emerald/60"
+              className="max-h-28 min-h-11 flex-1 resize-none rounded-xl border border-ink-border bg-ink px-3 py-2.5 text-sm text-paper placeholder:text-paper/30 focus:border-mint/60 focus:outline-none focus:ring-2 focus:ring-mint/60"
             />
             <button
               type="button"
               onClick={toggleListening}
               className={cn(
                 'flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border transition-colors',
-                listening ? 'border-clay bg-clay text-paper' : voiceMode === 'transcribing' ? 'border-gold bg-gold/15 text-gold' : 'border-ink-border bg-ink text-paper/70 hover:text-paper'
+                listening ? 'border-peach bg-peach text-ink' : voiceMode === 'transcribing' ? 'border-sand bg-sand/15 text-sand' : 'border-ink-border bg-ink text-paper/70 hover:text-paper'
               )}
               aria-label={listening ? 'Stop voice note' : 'Start voice note'}
               disabled={voiceMode === 'transcribing'}
@@ -1511,7 +1511,7 @@ export function AiQuickAddModal({
             <button
               type="submit"
               disabled={loading || listening || !message.trim()}
-              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald text-paper transition-colors hover:bg-emerald/90 disabled:opacity-40"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-mint text-ink transition-colors hover:bg-mint/90 disabled:opacity-40"
               aria-label="Send message"
             >
               {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}

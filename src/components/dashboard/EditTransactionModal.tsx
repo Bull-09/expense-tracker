@@ -145,7 +145,7 @@ export function EditTransactionModal({
                 }}
                 className={cn(
                   'rounded-lg border py-2 text-sm font-medium transition-colors',
-                  kind === k ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/60'
+                  kind === k ? 'border-mint bg-mint/15 text-mint' : 'border-ink-border text-paper/60'
                 )}
               >
                 {KIND_LABELS[k]}
@@ -173,7 +173,7 @@ export function EditTransactionModal({
                 setCategoryId(e.target.value);
                 if (e.target.value) setCreateCategoryName('');
               }}
-              className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+              className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
             >
               <option value="">Uncategorized</option>
               {relevantCategories.map((c) => (
@@ -181,8 +181,8 @@ export function EditTransactionModal({
               ))}
             </select>
             {!effectiveCategoryId && (
-              <div className="rounded-lg border border-emerald/25 bg-emerald/5 px-3 py-2.5">
-                <p className="text-xs font-medium text-emerald">
+              <div className="rounded-lg border border-mint/25 bg-mint/5 px-3 py-2.5">
+                <p className="text-xs font-medium text-mint">
                   Create a new category while saving
                 </p>
                 <p className="mt-1 text-xs text-paper/50">
@@ -204,7 +204,7 @@ export function EditTransactionModal({
                   <button
                     type="button"
                     onClick={() => setCategoryId(suggestedCategory.id)}
-                    className="mt-2 text-xs font-medium text-emerald"
+                    className="mt-2 text-xs font-medium text-mint"
                   >
                     Use existing &quot;{suggestedCategory.name}&quot;
                   </button>
@@ -224,7 +224,7 @@ export function EditTransactionModal({
                   setSelectedFriends([]);
                   setCustomAmounts({});
                 }}
-                className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+                className="w-full rounded-lg border border-ink-border bg-ink-raised px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
               >
                 <option value="">Personal / no group</option>
                 {groups.map((group) => (
@@ -244,7 +244,7 @@ export function EditTransactionModal({
                 disabled={otherUsers.length === 0}
                 className="mb-3 flex items-center gap-2 text-sm font-medium text-paper/80"
               >
-                {splitEnabled ? <Minus size={16} className="text-emerald" /> : <Plus size={16} className="text-emerald" />}
+                {splitEnabled ? <Minus size={16} className="text-mint" /> : <Plus size={16} className="text-mint" />}
                 Split this expense
               </button>
 
@@ -256,7 +256,7 @@ export function EditTransactionModal({
                         key={mode}
                         type="button"
                         onClick={() => setSplitMode(mode)}
-                        className={cn('rounded-lg border py-1.5 text-xs font-medium', splitMode === mode ? 'border-emerald bg-emerald/15 text-emerald' : 'border-ink-border text-paper/60')}
+                        className={cn('rounded-lg border py-1.5 text-xs font-medium', splitMode === mode ? 'border-mint bg-mint/15 text-mint' : 'border-ink-border text-paper/60')}
                       >
                         {mode === 'equal' ? 'Split equally' : 'Custom amounts'}
                       </button>
@@ -271,7 +271,7 @@ export function EditTransactionModal({
                           <button
                             type="button"
                             onClick={() => toggleFriend(u.id)}
-                            className={cn('flex flex-1 items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm', selected ? 'border-emerald bg-emerald/10' : 'border-ink-border text-paper/60')}
+                            className={cn('flex flex-1 items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm', selected ? 'border-mint bg-mint/10' : 'border-ink-border text-paper/60')}
                           >
                             <span className="truncate">{u.full_name}</span>
                           </button>
@@ -298,7 +298,7 @@ export function EditTransactionModal({
           )}
 
           {error && (
-            <div className="rounded-lg border border-clay/30 bg-clay-soft/10 px-3 py-2 text-sm text-clay">
+            <div className="rounded-lg border border-peach/30 bg-peach/10 px-3 py-2 text-sm text-peach">
               {error}
             </div>
           )}

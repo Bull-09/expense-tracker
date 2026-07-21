@@ -183,7 +183,7 @@ export function SubscriptionsPanel({
           </div>
           <div className="rounded-lg border border-ink-border bg-ink px-3 py-2 text-right">
             <p className="text-xs text-paper/40">Monthly burn</p>
-            <p className="font-ledger text-lg font-bold text-clay">{formatCurrency(activeMonthlyTotal)}</p>
+            <p className="font-ledger text-lg font-bold text-peach">{formatCurrency(activeMonthlyTotal)}</p>
           </div>
         </div>
 
@@ -196,7 +196,7 @@ export function SubscriptionsPanel({
             <select
               value={form.frequency}
               onChange={(event) => patchForm({ frequency: event.target.value as Subscription['frequency'] })}
-              className="w-full rounded-lg border border-ink-border bg-ink px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+              className="w-full rounded-lg border border-ink-border bg-ink px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
             >
               <option value="monthly">Monthly</option>
               <option value="weekly">Weekly</option>
@@ -209,7 +209,7 @@ export function SubscriptionsPanel({
             <select
               value={form.categoryId}
               onChange={(event) => patchForm({ categoryId: event.target.value })}
-              className="w-full rounded-lg border border-ink-border bg-ink px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+              className="w-full rounded-lg border border-ink-border bg-ink px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
             >
               <option value="">Auto category</option>
               {expenseCategories.map((category) => (
@@ -223,7 +223,7 @@ export function SubscriptionsPanel({
             <select
               value={form.groupId}
               onChange={(event) => patchForm({ groupId: event.target.value })}
-              className="w-full rounded-lg border border-ink-border bg-ink px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-emerald/60"
+              className="w-full rounded-lg border border-ink-border bg-ink px-3.5 py-2.5 text-paper focus:outline-none focus:ring-2 focus:ring-mint/60"
             >
               <option value="">Personal</option>
               {groups.map((group) => (
@@ -235,7 +235,7 @@ export function SubscriptionsPanel({
           <Input label="Notes" value={form.notes} onChange={(event) => patchForm({ notes: event.target.value })} placeholder="Plan, renewal, card used" className="sm:col-span-2" />
 
           <label className="flex items-center gap-2 rounded-lg border border-ink-border bg-ink px-3 py-2.5 text-sm text-paper/70">
-            <input type="checkbox" checked={form.active} onChange={(event) => patchForm({ active: event.target.checked })} className="h-4 w-4 accent-emerald" />
+            <input type="checkbox" checked={form.active} onChange={(event) => patchForm({ active: event.target.checked })} className="h-4 w-4 accent-mint" />
             Active
           </label>
 
@@ -247,13 +247,13 @@ export function SubscriptionsPanel({
           </div>
         </form>
 
-        {message && <p className="mt-4 rounded-lg border border-emerald/30 bg-emerald/10 px-3 py-2 text-sm text-emerald">{message}</p>}
-        {error && <p className="mt-4 rounded-lg border border-clay/30 bg-clay-soft/10 px-3 py-2 text-sm text-clay">{error}</p>}
+        {message && <p className="mt-4 rounded-lg border border-mint/30 bg-mint/10 px-3 py-2 text-sm text-mint">{message}</p>}
+        {error && <p className="mt-4 rounded-lg border border-peach/30 bg-peach/10 px-3 py-2 text-sm text-peach">{error}</p>}
       </section>
 
       <aside className="rounded-xl border border-ink-border bg-ink-raised p-5">
         <div className="mb-4 flex items-center gap-2">
-          <CalendarClock size={18} className="text-emerald" />
+          <CalendarClock size={18} className="text-mint" />
           <h2 className="font-semibold">Coming up</h2>
         </div>
         {nextThree.length === 0 ? (
@@ -264,7 +264,7 @@ export function SubscriptionsPanel({
               <div key={item.id} className="rounded-lg border border-ink-border bg-ink p-3">
                 <div className="flex items-center justify-between gap-3">
                   <p className="truncate text-sm font-medium">{item.name}</p>
-                  <p className="font-ledger text-sm font-bold text-clay">{formatCurrency(item.amount)}</p>
+                  <p className="font-ledger text-sm font-bold text-peach">{formatCurrency(item.amount)}</p>
                 </div>
                 <p className="mt-1 text-xs text-paper/40">
                   Due {format(new Date(item.next_due_on), 'MMM d')} · {item.frequency}
@@ -287,7 +287,7 @@ export function SubscriptionsPanel({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate font-medium">{item.name}</p>
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${item.active ? 'bg-emerald/15 text-emerald' : 'bg-ink text-paper/40'}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${item.active ? 'bg-mint/15 text-mint' : 'bg-ink text-paper/40'}`}>
                       {item.active ? 'Active' : 'Paused'}
                     </span>
                     {item.category && <span className="text-xs text-paper/40">{item.category.name}</span>}
