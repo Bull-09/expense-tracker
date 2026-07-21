@@ -203,9 +203,14 @@ export function CaptureSheet({
     setCategoryId(draft.categoryId ?? '');
     setDescription(draft.description);
     setResolution(method);
-    setVoiceDraftReady(Boolean(draft.amount && draft.categoryId));
+    setVoiceDraftReady(true);
     setCountdown(3);
-    console.info('[capture-resolution]', { source: 'voice', method, confidence: draft.confidence });
+    const resolutionLog = { source: 'voice', method, confidence: draft.confidence, at: new Date().toISOString() };
+    console.info('[capture-resolution]', resolutionLog);
+    try {
+      const previous = JSON.parse(localStorage.getItem('c137:capture-resolution-log') ?? '[]');
+      localStorage.setItem('c137:capture-resolution-log', JSON.stringify([resolutionLog, ...(Array.isArray(previous) ? previous : [])].slice(0, 100)));
+    } catch { /* Logging must never block capture. */ }
     if (!draft.amount || !draft.categoryId) setError('Review the draft and add the missing amount or category before saving.');
   }
 
@@ -333,12 +338,12 @@ export function CaptureSheet({
   });
 
   useEffect(() => {
-    if (!open || mode !== 'voice' || !voiceDraftReady || numericAmount <= 0 || !selectedCategory || submitting) return;
+    if (!open || mode !== 'voice' || !voiceDraftReady || numericAmount <= 0 || !categoryId || !selectedCategory || submitting) return;
     const startedAt = Date.now();
     const interval = window.setInterval(() => setCountdown(Math.max(0, 3 - Math.floor((Date.now() - startedAt) / 1000))), 250);
     const timeout = window.setTimeout(() => void saveRef.current(), 3000);
     return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
-  }, [editVersion, mode, numericAmount, open, selectedCategory, submitting, voiceDraftReady]);
+  }, [categoryId, editVersion, mode, numericAmount, open, selectedCategory, submitting, voiceDraftReady]);
 
   async function undoAutoSave() {
     if (!undoItem) return;
