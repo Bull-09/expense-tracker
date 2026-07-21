@@ -1,10 +1,7 @@
 import {
   getCurrentProfile,
-  getCategories,
   getTransactions,
   getSplitShares,
-  getDirectory,
-  getGroups,
   getSubscriptions,
   ensureDueSubscriptionTransactions,
   computeTotals,
@@ -18,8 +15,6 @@ import { InsightsCard } from '@/components/dashboard/InsightsCard';
 import { EstimateCard } from '@/components/dashboard/EstimateCard';
 import { CategoryBreakdownChart } from '@/components/dashboard/CategoryBreakdownChart';
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
-import { AddTransactionTrigger } from '@/components/dashboard/AddTransactionTrigger';
-import { DirectoryUser } from '@/lib/types';
 import { SubscriptionBurnCard } from '@/components/dashboard/SubscriptionBurnCard';
 
 export default async function DashboardPage() {
@@ -28,12 +23,9 @@ export default async function DashboardPage() {
 
   await ensureDueSubscriptionTransactions();
 
-  const [categories, transactions, splitShares, directory, groups, subscriptions] = await Promise.all([
-    getCategories(),
+  const [transactions, splitShares, subscriptions] = await Promise.all([
     getTransactions(),
     getSplitShares(),
-    getDirectory(),
-    getGroups(),
     getSubscriptions(),
   ]);
 
@@ -73,12 +65,6 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <AddTransactionTrigger
-        categories={categories}
-        directory={directory as DirectoryUser[]}
-        groups={groups}
-        currentUserId={profile.id}
-      />
     </div>
   );
 }

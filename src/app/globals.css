@@ -1,17 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --ink: #0F1115;
-  --ink-raised: #161922;
-  --ink-border: #262B38;
-  --paper: #FAFAF7;
-  --paper-dim: #F0EEE7;
-  --emerald: #3F7A5C;
-  --emerald-soft: #DCEBE3;
-  --clay: #B5544B;
-  --clay-soft: #F3DDDA;
-  --slate: #6B7280;
-  --gold: #C99A3E;
+  --ink: #0E0F0C;
+  --ink-raised: #161813;
+  --ink-border: #262922;
+  --ink-border-soft: #2C3026;
+  --paper: #F4F3EC;
+  --mint: #62D99A;
+  --peach: #F2A57E;
+  --sand: #E4C36B;
+  --lilac: #B79BCB;
+  --teal: #7FB4C7;
 
   --background: var(--ink);
   --foreground: var(--paper);
@@ -21,19 +20,26 @@
   --color-ink: var(--ink);
   --color-ink-raised: var(--ink-raised);
   --color-ink-border: var(--ink-border);
+  --color-ink-border-soft: var(--ink-border-soft);
   --color-paper: var(--paper);
-  --color-paper-dim: var(--paper-dim);
-  --color-emerald: var(--emerald);
-  --color-emerald-soft: var(--emerald-soft);
-  --color-clay: var(--clay);
-  --color-clay-soft: var(--clay-soft);
-  --color-slate: var(--slate);
-  --color-gold: var(--gold);
+  --color-mint: var(--mint);
+  --color-peach: var(--peach);
+  --color-sand: var(--sand);
+  --color-lilac: var(--lilac);
+  --color-teal: var(--teal);
+  /* Temporary aliases keep existing screens coherent while they migrate phase by phase. */
+  --color-paper-dim: color-mix(in srgb, var(--paper) 92%, var(--ink));
+  --color-emerald: var(--mint);
+  --color-emerald-soft: color-mix(in srgb, var(--mint) 18%, var(--ink));
+  --color-clay: var(--peach);
+  --color-clay-soft: color-mix(in srgb, var(--peach) 18%, var(--ink));
+  --color-slate: color-mix(in srgb, var(--paper) 55%, var(--ink));
+  --color-gold: var(--sand);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
-  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
-  --font-ledger: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-display: var(--font-sora), system-ui, sans-serif;
+  --font-body: var(--font-sora), system-ui, sans-serif;
+  --font-ledger: var(--font-spline-sans-mono), ui-monospace, monospace;
 }
 
 * {
@@ -57,12 +63,12 @@ body {
 }
 
 ::selection {
-  background: var(--emerald);
-  color: var(--paper);
+  background: var(--mint);
+  color: var(--ink);
 }
 
 :focus-visible {
-  outline: 2px solid var(--emerald);
+  outline: 2px solid var(--mint);
   outline-offset: 2px;
 }
 

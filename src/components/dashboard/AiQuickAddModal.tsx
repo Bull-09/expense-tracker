@@ -334,6 +334,16 @@ export function AiQuickAddModal({
     messagesEndRef.current?.scrollIntoView({ block: 'end' });
   }, [messages, loading, drafts.length, subscriptionDrafts.length, friendLedgerDrafts.length, actionPlans.length]);
 
+  useEffect(() => {
+    function openCapture() {
+      setOpen(true);
+      window.requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+
+    window.addEventListener('c137:open-capture', openCapture);
+    return () => window.removeEventListener('c137:open-capture', openCapture);
+  }, []);
+
   function resolveFriendDraft(item: FriendLedgerDraft): FriendLedgerDraft {
     const friendDirectory = directory.filter((person) => person.id !== currentUserId);
     if (item.personId && friendDirectory.some((person) => person.id === item.personId)) return item;
@@ -910,7 +920,7 @@ export function AiQuickAddModal({
   }
 
   return (
-    <div className="fixed inset-x-0 bottom-16 z-30 px-3 lg:bottom-5 lg:left-64">
+    <div className="fixed inset-x-0 bottom-24 z-30 px-3 md:bottom-5 md:left-[76px] lg:left-[232px]">
       <div className="mx-auto flex max-w-3xl flex-col overflow-hidden rounded-2xl border border-ink-border bg-ink-raised/95 shadow-2xl shadow-black/30 backdrop-blur">
         <button
           type="button"

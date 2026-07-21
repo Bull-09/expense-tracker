@@ -1,6 +1,21 @@
 import type { Metadata, Viewport } from "next";
+import { Sora, Spline_Sans_Mono } from "next/font/google";
 import { PwaRegister } from "@/components/PwaRegister";
 import "./globals.css";
+
+const sora = Sora({
+  variable: "--font-sora",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
+const splineSansMono = Spline_Sans_Mono({
+  variable: "--font-spline-sans-mono",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "C-137 Capital",
@@ -15,7 +30,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0F1115",
+  themeColor: "#0E0F0C",
 };
 
 export default function RootLayout({
@@ -24,7 +39,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className={`${sora.variable} ${splineSansMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-ink text-paper">
         <PwaRegister />
         {children}

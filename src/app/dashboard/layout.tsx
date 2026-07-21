@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getCurrentProfile } from '@/lib/data/dashboard';
+import { getCategories, getCurrentProfile, getDirectory, getGroups } from '@/lib/data/dashboard';
 import { AppShell } from '@/components/layout/AppShell';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -9,5 +9,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect('/login');
   }
 
-  return <AppShell profile={profile}>{children}</AppShell>;
+  const [categories, directory, groups] = await Promise.all([
+    getCategories(),
+    getDirectory(),
+    getGroups(),
+  ]);
+
+  return (
+    <AppShell profile={profile} categories={categories} directory={directory} groups={groups}>
+      {children}
+    </AppShell>
+  );
 }
