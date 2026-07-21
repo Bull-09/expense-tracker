@@ -4,7 +4,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { ArrowLeft, Check, Delete, Mic, ReceiptText, ScanLine, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createTransaction } from '@/app/actions/transactions';
-import { Category, DirectoryUser, Transaction, TransactionKind } from '@/lib/types';
+import { learnMerchantRule } from '@/app/actions/categories';
+import { Category, DirectoryUser, MerchantRule, Transaction, TransactionKind } from '@/lib/types';
+import { matchMerchantRule } from '@/lib/categories/rules';
 import { cn, formatCurrency } from '@/lib/utils/format';
 import {
   confirmOptimisticTransaction,
@@ -35,10 +37,12 @@ function updateAmount(current: string, key: (typeof KEYS)[number]) {
 
 export function CaptureSheet({
   categories,
+  merchantRules,
   directory,
   currentUserId,
 }: {
   categories: Category[];
+  merchantRules: MerchantRule[];
   directory: DirectoryUser[];
   currentUserId: string;
 }) {
@@ -48,6 +52,7 @@ export function CaptureSheet({
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [categoryWasChosen, setCategoryWasChosen] = useState(false);
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +62,9 @@ export function CaptureSheet({
     () => categories.filter((category) => category.kind === (kind === 'income' ? 'income' : 'expense')),
     [categories, kind]
   );
-  const selectedCategory = relevantCategories.find((category) => category.id === categoryId) ?? relevantCategories[0];
+  const matchedRule = useMemo(() => kind === 'expense' ? matchMerchantRule(description, merchantRules) : null, [description, kind, merchantRules]);
+  const effectiveCategoryId = categoryId || matchedRule?.rule.category_id || '';
+  const selectedCategory = relevantCategories.find((category) => category.id === effectiveCategoryId) ?? relevantCategories[0];
   const friends = useMemo(
     () => directory.filter((person) => person.id !== currentUserId),
     [currentUserId, directory]
@@ -108,6 +115,7 @@ export function CaptureSheet({
     setAmount('');
     setDescription('');
     setCategoryId('');
+    setCategoryWasChosen(false);
     setSelectedFriends([]);
     setError(null);
   }
@@ -131,7 +139,7 @@ export function CaptureSheet({
       <button
         key={category.id}
         type="button"
-        onClick={() => setCategoryId(category.id)}
+        onClick={() => { setCategoryId(category.id); setCategoryWasChosen(true); }}
         className={cn('flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium', selected ? 'border-mint/60 bg-mint/10 text-mint' : 'border-ink-border text-paper/50')}
       >
         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: category.color }} />
@@ -193,6 +201,9 @@ export function CaptureSheet({
           ? selectedFriends.map((userId) => ({ userId, amount: equalShare }))
           : undefined,
       });
+      if (kind === 'expense' && categoryWasChosen && description.trim() && selectedCategory) {
+        void learnMerchantRule({ text: description, categoryId: selectedCategory.id }).catch(() => undefined);
+      }
       confirmOptimisticTransaction(temporaryId, { ...transaction, category: selectedCategory ?? null });
       reset();
       router.refresh();
@@ -251,7 +262,7 @@ export function CaptureSheet({
               <button
                 key={entry.value}
                 type="button"
-                onClick={() => { setKind(entry.value); setCategoryId(''); setSelectedFriends([]); }}
+                onClick={() => { setKind(entry.value); setCategoryId(''); setCategoryWasChosen(false); setSelectedFriends([]); }}
                 className={cn('rounded-lg py-2 text-xs font-semibold transition-colors', kind === entry.value ? 'bg-ink-border-soft text-paper' : 'text-paper/40')}
               >
                 {entry.label}
@@ -296,6 +307,9 @@ export function CaptureSheet({
                 {categoryChips}
               </div>
             ) : <p className="text-sm text-paper/40">This entry will be saved uncategorized.</p>}
+            {matchedRule && !categoryWasChosen && selectedCategory && (
+              <p className="mt-2 text-xs text-mint/75">Suggested from “{matchedRule.rule.merchant_pattern}”</p>
+            )}
           </div>
 
           {kind === 'expense' && friends.length > 0 && (

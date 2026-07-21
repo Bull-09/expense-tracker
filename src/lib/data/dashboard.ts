@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { addMonths, addWeeks, format, isAfter, parseISO } from 'date-fns';
 import { inferCategory } from '@/lib/categories/auto';
-import { Profile, Transaction, SplitShare, Category, BalanceSummary, DashboardTotals, Group, Subscription } from '@/lib/types';
+import { Profile, Transaction, SplitShare, Category, BalanceSummary, DashboardTotals, Group, Subscription, MerchantRule } from '@/lib/types';
 
 function isMissingSchemaError(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? '';
@@ -26,8 +26,37 @@ export async function getCurrentProfile(): Promise<Profile | null> {
 
 export async function getCategories(): Promise<Category[]> {
   const supabase = await createClient();
-  const { data } = await supabase.from('categories').select('*').order('name');
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('is_hidden', false)
+    .order('usage_count', { ascending: false })
+    .order('last_used_at', { ascending: false, nullsFirst: false })
+    .order('sort_order')
+    .order('name');
+  if (error && isMissingSchemaError(error)) {
+    const { data: fallback } = await supabase.from('categories').select('*').order('name');
+    return (fallback ?? []) as Category[];
+  }
   return (data ?? []) as Category[];
+}
+
+export async function getAllCategories(): Promise<Category[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('categories').select('*').order('sort_order').order('name');
+  if (error && isMissingSchemaError(error)) return getCategories();
+  return (data ?? []) as Category[];
+}
+
+export async function getMerchantRules(): Promise<MerchantRule[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('merchant_rules')
+    .select('*')
+    .order('usage_count', { ascending: false })
+    .order('last_used_at', { ascending: false });
+  if (error && isMissingSchemaError(error)) return [];
+  return (data ?? []) as MerchantRule[];
 }
 
 export async function getTransactions(limit = 200): Promise<Transaction[]> {

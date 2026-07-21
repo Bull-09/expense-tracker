@@ -100,22 +100,43 @@ create trigger on_auth_user_created
 -- ----------------------------------------------------------------------------
 create table if not exists public.categories (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.profiles(id) on delete cascade,
+  user_id uuid references public.profiles(id) on delete cascade,
   name text not null,
   kind text not null check (kind in ('expense', 'income')),
   color text not null default '#6B7280',
   icon text not null default 'circle',
+  is_default boolean not null default false,
+  is_hidden boolean not null default false,
+  sort_order integer not null default 0,
+  usage_count integer not null default 0,
+  last_used_at timestamptz,
   created_at timestamptz not null default now(),
   unique (user_id, name, kind)
 );
 
 alter table public.categories enable row level security;
 
-create policy "Users manage their own categories"
-  on public.categories for all
-  to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+create policy "Authenticated users manage categories"
+  on public.categories for all to authenticated using (true) with check (true);
+
+create unique index if not exists categories_system_name_kind_key
+  on public.categories (lower(name), kind) where user_id is null;
+
+create table if not exists public.merchant_rules (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  merchant_pattern text not null,
+  category_id uuid not null references public.categories(id) on delete cascade,
+  usage_count integer not null default 1,
+  last_used_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists merchant_rules_user_pattern_key
+  on public.merchant_rules (user_id, lower(merchant_pattern));
+alter table public.merchant_rules enable row level security;
+create policy "Authenticated users manage merchant rules"
+  on public.merchant_rules for all to authenticated using (true) with check (true);
 
 -- ----------------------------------------------------------------------------
 -- 3. TRANSACTIONS
@@ -379,7 +400,7 @@ create or replace view public.directory as
 
 -- ----------------------------------------------------------------------------
 -- 6. DEFAULT CATEGORY SEEDING
--- Seed sensible categories for every new user.
+-- Shared system categories; personal categories are added from Settings.
 -- ----------------------------------------------------------------------------
 create or replace function public.seed_default_categories()
 returns trigger
@@ -387,22 +408,33 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
-  insert into public.categories (user_id, name, kind, color, icon) values
-    (new.id, 'Food & Dining', 'expense', '#B5544B', 'utensils'),
-    (new.id, 'Travel', 'expense', '#B5544B', 'plane'),
-    (new.id, 'Rent & Utilities', 'expense', '#B5544B', 'home'),
-    (new.id, 'Software & Tools', 'expense', '#B5544B', 'laptop'),
-    (new.id, 'Entertainment', 'expense', '#B5544B', 'film'),
-    (new.id, 'Health', 'expense', '#B5544B', 'heart-pulse'),
-    (new.id, 'Shopping', 'expense', '#B5544B', 'shopping-bag'),
-    (new.id, 'Other Expense', 'expense', '#B5544B', 'circle'),
-    (new.id, 'Project Income', 'income', '#3F7A5C', 'briefcase'),
-    (new.id, 'Retainer', 'income', '#3F7A5C', 'repeat'),
-    (new.id, 'Consulting', 'income', '#3F7A5C', 'message-square'),
-    (new.id, 'Other Income', 'income', '#3F7A5C', 'circle');
   return new;
 end;
 $$;
+
+insert into public.categories (user_id, name, kind, color, icon, is_default, sort_order) values
+  (null, 'Food', 'expense', '#A8E6CF', 'utensils', true, 10),
+  (null, 'Transport', 'expense', '#FFD3B6', 'car', true, 20),
+  (null, 'Shopping', 'expense', '#F4E4BA', 'shopping-bag', true, 30),
+  (null, 'Bills', 'expense', '#B8C0FF', 'receipt', true, 40),
+  (null, 'Entertainment', 'expense', '#FFAAA5', 'film', true, 50),
+  (null, 'Health', 'expense', '#FF8B94', 'heart-pulse', true, 60),
+  (null, 'Travel', 'expense', '#9EE7E5', 'plane', true, 70),
+  (null, 'Other', 'expense', '#D8CFBC', 'circle', true, 80)
+on conflict do nothing;
+
+create or replace function public.bump_category_usage()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.category_id is not null and new.kind <> 'transfer' then
+    update public.categories set usage_count = usage_count + 1, last_used_at = now() where id = new.category_id;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger on_transaction_category_usage after insert on public.transactions
+  for each row execute procedure public.bump_category_usage();
 
 drop trigger if exists on_profile_created_seed_categories on public.profiles;
 create trigger on_profile_created_seed_categories

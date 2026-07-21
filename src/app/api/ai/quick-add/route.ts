@@ -5,11 +5,14 @@ import {
   getCurrentProfile,
   getDirectory,
   getGroups,
+  getMerchantRules,
   getSubscriptions,
   getSplitShares,
   getTransactions,
 } from '@/lib/data/dashboard';
 import { inferCategoryMatch, suggestCategoryName } from '@/lib/categories/auto';
+import { matchMerchantRule } from '@/lib/categories/rules';
+import type { MerchantRule } from '@/lib/types';
 import { format } from 'date-fns';
 import { TransactionKind } from '@/lib/types';
 
@@ -591,8 +594,13 @@ function resolveCategory(
   text: string,
   categoryId: string | null | undefined,
   suggestedCategoryName: string | null | undefined,
-  categories: Awaited<ReturnType<typeof getCategories>>
+  categories: Awaited<ReturnType<typeof getCategories>>,
+  merchantRules: MerchantRule[] = []
 ) {
+  const merchantMatch = matchMerchantRule(text, merchantRules);
+  if (merchantMatch && categoryExistsForKind(merchantMatch.rule.category_id, kind, categories)) {
+    return { categoryId: merchantMatch.rule.category_id, suggestedCategoryName: null };
+  }
   const localMatch = inferCategoryMatch(kind, text, categories);
   const validAiCategoryId = categoryExistsForKind(categoryId, kind, categories) ? categoryId ?? null : null;
 
@@ -969,14 +977,16 @@ export async function POST(request: Request) {
       return jsonError('AI is not configured. Add OPENAI_API_KEY in Vercel, then redeploy.', 503);
     }
 
-    const [categories, directory, groups, transactions, subscriptions, splitShares] = await Promise.all([
+    const [categories, directory, groups, transactions, subscriptions, splitShares, merchantRules] = await Promise.all([
       getCategories(),
       getDirectory(),
       getGroups(),
       getTransactions(35),
       getSubscriptions(),
       getSplitShares(),
+      getMerchantRules(),
     ]);
+    const localMerchantMatch = matchMerchantRule(normalizedTranscript, merchantRules);
     const balances = computeBalances(splitShares, profile.id).slice(0, 8);
     const findDirectoryPerson = (personId?: string | null, personName?: string | null) => {
       const friendDirectory = directory.filter((person) => person.id !== profile.id);
@@ -1019,6 +1029,11 @@ export async function POST(request: Request) {
         name: category.name,
         kind: category.kind,
       })),
+      localMerchantRule: localMerchantMatch ? {
+        categoryId: localMerchantMatch.rule.category_id,
+        pattern: localMerchantMatch.rule.merchant_pattern,
+        confidence: localMerchantMatch.score,
+      } : null,
       friends: directory
         .filter((person) => person.id !== profile.id)
         .map((person) => ({
@@ -1257,7 +1272,8 @@ export async function POST(request: Request) {
           `${draft.description ?? ''} ${draft.source ?? ''} ${draft.suggestedCategoryName ?? ''}`,
           draft.categoryId,
           draft.suggestedCategoryName,
-          categories
+          categories,
+          merchantRules
         );
 
         return {
@@ -1283,7 +1299,8 @@ export async function POST(request: Request) {
           `${draft.description ?? ''} ${draft.source ?? ''} ${draft.suggestedCategoryName ?? ''}`,
           draft.categoryId,
           draft.suggestedCategoryName,
-          categories
+          categories,
+          merchantRules
         );
 
         return {
@@ -1317,7 +1334,8 @@ export async function POST(request: Request) {
           `${draft.name ?? ''} ${draft.notes ?? ''}`,
           draft.categoryId,
           null,
-          categories
+          categories,
+          merchantRules
         );
 
         return {

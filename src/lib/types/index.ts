@@ -13,11 +13,26 @@ export interface Profile {
 
 export interface Category {
   id: string;
-  user_id: string;
+  user_id: string | null;
   name: string;
   kind: CategoryKind;
   color: string;
   icon: string;
+  is_default: boolean;
+  is_hidden: boolean;
+  sort_order: number;
+  usage_count: number;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+export interface MerchantRule {
+  id: string;
+  user_id: string;
+  merchant_pattern: string;
+  category_id: string;
+  usage_count: number;
+  last_used_at: string;
   created_at: string;
 }
 

@@ -23,7 +23,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { CaptureSheet } from '@/components/dashboard/CaptureSheet';
-import { Category, DirectoryUser, Group, Profile } from '@/lib/types';
+import { Category, DirectoryUser, Group, MerchantRule, Profile } from '@/lib/types';
 
 const AiQuickAddModal = dynamic(
   () => import('@/components/dashboard/AiQuickAddModal').then((module) => module.AiQuickAddModal),
@@ -60,12 +60,14 @@ function isActive(pathname: string, href: string) {
 export function AppShell({
   profile,
   categories,
+  merchantRules,
   directory,
   groups,
   children,
 }: {
   profile: Profile;
   categories: Category[];
+  merchantRules: MerchantRule[];
   directory: DirectoryUser[];
   groups: Group[];
   children: React.ReactNode;
@@ -270,7 +272,7 @@ export function AppShell({
         </div>
       )}
 
-      <CaptureSheet categories={categories} directory={directory} currentUserId={profile.id} />
+      <CaptureSheet categories={categories} merchantRules={merchantRules} directory={directory} currentUserId={profile.id} />
       {aiRequested && (
         <AiQuickAddModal categories={categories} directory={directory} groups={groups} currentUserId={profile.id} initiallyOpen />
       )}
