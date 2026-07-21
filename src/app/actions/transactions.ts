@@ -93,13 +93,14 @@ export async function createTransaction(input: {
   source?: string;
   occurredOn: string;
   splits?: SplitInput[];
+  expenseSplits?: Array<{ memberId: string; amount: number; percent?: number | null }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
   assertValidTransactionKind(input.kind);
 
-  const isSplit = !!(input.splits && input.splits.length > 0);
+  const isSplit = !!((input.splits && input.splits.length > 0) || (input.expenseSplits && input.expenseSplits.length > 0));
   let categoryId = input.categoryId;
 
   if (input.kind === 'transfer') {
@@ -162,6 +163,19 @@ export async function createTransaction(input: {
     if (rows.length > 0) {
       const { error: splitError } = await supabase.from('split_shares').insert(rows);
       if (splitError) throw new Error(splitError.message);
+    }
+  }
+
+  if (input.expenseSplits?.length) {
+    const { error: expenseSplitError } = await supabase.from('expense_splits').insert(input.expenseSplits.map((share) => ({
+      transaction_id: transaction.id,
+      member_id: share.memberId,
+      share_amount: share.amount,
+      share_percent: share.percent ?? null,
+    })));
+    if (expenseSplitError) {
+      await supabase.from('transactions').delete().eq('id', transaction.id);
+      throw new Error(expenseSplitError.message);
     }
   }
 
@@ -473,6 +487,7 @@ export async function createGroup(input: {
   name: string;
   emoji: string;
   memberIds: string[];
+  contacts?: Array<{ name: string; phone?: string; upiId?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -486,6 +501,7 @@ export async function createGroup(input: {
     .from('groups')
     .insert({
       owner_id: user.id,
+      created_by: user.id,
       name,
       emoji,
     })
@@ -504,7 +520,41 @@ export async function createGroup(input: {
   const { error: memberError } = await supabase.from('group_members').insert(memberRows);
   if (memberError) throw new Error(memberError.message);
 
+  const contacts = (input.contacts ?? []).filter((contact) => contact.name.trim()).map((contact) => ({
+    group_id: group.id,
+    user_id: null,
+    role: 'member',
+    contact_name: contact.name.trim(),
+    phone: contact.phone?.trim() || null,
+    upi_id: contact.upiId?.trim() || null,
+  }));
+  if (contacts.length > 0) {
+    const { error: contactError } = await supabase.from('group_members').insert(contacts);
+    if (contactError) throw new Error(contactError.message);
+  }
+
   revalidatePath('/dashboard');
+  revalidatePath('/dashboard/groups');
+}
+
+export async function settleExpenseSplit(id: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { error } = await supabase.from('expense_splits').update({ is_settled: true, settled_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw new Error(error.message);
+  revalidatePath('/dashboard/splits');
+  revalidatePath('/dashboard/groups');
+}
+
+export async function updateProfileUpiId(upiId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const value = upiId.trim();
+  if (value && !/^[\w.-]+@[\w.-]+$/.test(value)) throw new Error('Enter a valid UPI ID, such as name@bank.');
+  const { error } = await supabase.from('profiles').update({ upi_id: value || null }).eq('id', user.id);
+  if (error) throw new Error(error.message);
   revalidatePath('/dashboard/groups');
 }
 

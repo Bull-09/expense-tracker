@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { createTransaction, deleteTransaction } from '@/app/actions/transactions';
 import { learnMerchantRule } from '@/app/actions/categories';
-import { Category, DirectoryUser, MerchantRule, Transaction, TransactionKind } from '@/lib/types';
+import { Category, DirectoryUser, Group, MerchantRule, Transaction, TransactionKind } from '@/lib/types';
 import { matchMerchantRule } from '@/lib/categories/rules';
 import { parseVoiceTranscript } from '@/lib/capture/voice';
 import { prepareReceiptImage } from '@/lib/capture/image';
@@ -52,11 +52,13 @@ export function CaptureSheet({
   categories,
   merchantRules,
   directory,
+  groups,
   currentUserId,
 }: {
   categories: Category[];
   merchantRules: MerchantRule[];
   directory: DirectoryUser[];
+  groups: Group[];
   currentUserId: string;
 }) {
   const router = useRouter();
@@ -69,6 +71,11 @@ export function CaptureSheet({
   const [categoryId, setCategoryId] = useState('');
   const [categoryWasChosen, setCategoryWasChosen] = useState(false);
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
+  const [splitEditorOpen, setSplitEditorOpen] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState('');
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [splitMode, setSplitMode] = useState<'equal' | 'amount' | 'percent'>('equal');
+  const [customShares, setCustomShares] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [speechAvailable, setSpeechAvailable] = useState(true);
@@ -158,6 +165,7 @@ export function CaptureSheet({
     setCategoryId('');
     setCategoryWasChosen(false);
     setSelectedFriends([]);
+    setSelectedGroupId(''); setSelectedMemberIds([]); setSplitMode('equal'); setCustomShares({}); setSplitEditorOpen(false);
     setError(null);
     setTranscript('');
     setInterimTranscript('');
@@ -294,6 +302,8 @@ export function CaptureSheet({
   }
 
   const toggleFriend = useCallback((id: string) => {
+    setSelectedGroupId('');
+    setSelectedMemberIds([]);
     setSelectedFriends((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }, []);
 
@@ -336,7 +346,7 @@ export function CaptureSheet({
     const optimisticTransaction: Transaction = {
       id: temporaryId,
       user_id: currentUserId,
-      group_id: null,
+      group_id: selectedGroupId || null,
       subscription_id: null,
       kind,
       category_id: selectedCategory?.id ?? null,
@@ -345,7 +355,7 @@ export function CaptureSheet({
       description: finalDescription,
       source: null,
       occurred_on: occurredOn,
-      is_split: kind === 'expense' && selectedFriends.length > 0,
+      is_split: kind === 'expense' && (selectedFriends.length > 0 || selectedMemberIds.length > 0),
       created_at: new Date().toISOString(),
       category: selectedCategory ?? null,
     };
@@ -357,6 +367,7 @@ export function CaptureSheet({
     try {
       const transaction = await createTransaction({
         kind,
+        groupId: selectedGroupId || null,
         categoryId: selectedCategory?.id ?? null,
         amount: numericAmount,
         description: finalDescription,
@@ -364,6 +375,12 @@ export function CaptureSheet({
         splits: kind === 'expense' && selectedFriends.length > 0
           ? selectedFriends.map((userId) => ({ userId, amount: equalShare }))
           : undefined,
+        expenseSplits: kind === 'expense' && selectedGroupId && selectedMemberIds.length > 0
+          ? selectedMemberIds.map((memberId) => {
+              const raw = Number(customShares[memberId]) || 0;
+              const amount = splitMode === 'equal' ? numericAmount / (selectedMemberIds.length + 1) : splitMode === 'percent' ? numericAmount * raw / 100 : raw;
+              return { memberId, amount, percent: splitMode === 'percent' ? raw : null };
+            }) : undefined,
       });
       if (receiptFile && mode === 'scan') {
         const supabase = createClient();
@@ -584,6 +601,13 @@ export function CaptureSheet({
             </div>
           )}
 
+          {kind === 'expense' && groups.length > 0 && (
+            <button type="button" onClick={() => setSplitEditorOpen(true)} className="mt-4 flex w-full items-center justify-between rounded-xl border border-ink-border bg-ink px-3.5 py-3 text-left">
+              <span><span className="block text-sm font-semibold">Group split</span><span className="text-xs text-paper/40">{selectedGroupId ? `${groups.find((group) => group.id === selectedGroupId)?.name} · ${selectedMemberIds.length} shares · ${splitMode}` : 'Equal, custom amount, or percentage'}</span></span>
+              <span className="text-sm font-bold text-mint">Edit</span>
+            </button>
+          )}
+
           {error && <p role="alert" className="mt-4 rounded-xl border border-peach/30 bg-peach/10 px-3 py-2 text-sm text-peach">{error}</p>}
 
           <button
@@ -602,6 +626,25 @@ export function CaptureSheet({
       <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-1/2 z-[90] flex w-[min(92vw,420px)] -translate-x-1/2 items-center gap-3 rounded-2xl border border-mint/25 bg-ink-raised px-4 py-3 shadow-2xl">
         <Check size={18} className="text-mint" /><p className="min-w-0 flex-1 truncate text-sm">Saved {undoItem.description}</p>
         <button type="button" onClick={() => void undoAutoSave()} className="flex items-center gap-1.5 text-sm font-bold text-mint"><RotateCcw size={15} /> Undo</button>
+      </div>
+    )}
+    {splitEditorOpen && (
+      <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/70 sm:items-center sm:p-5">
+        <button className="absolute inset-0" onClick={() => setSplitEditorOpen(false)} aria-label="Close split editor" />
+        <section className="relative max-h-[88dvh] w-full overflow-y-auto rounded-t-[28px] border border-ink-border bg-ink-raised p-5 sm:max-w-lg sm:rounded-[28px]">
+          <div className="flex items-center justify-between"><div><h3 className="font-bold">Split editor</h3><p className="text-xs text-paper/45">Choose a group and the people who owe a share.</p></div><button onClick={() => setSplitEditorOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-ink"><X size={17} /></button></div>
+          <select value={selectedGroupId} onChange={(event) => { setSelectedGroupId(event.target.value); setSelectedMemberIds([]); setSelectedFriends([]); setCustomShares({}); }} className="mt-4 h-11 w-full rounded-xl border border-ink-border bg-ink px-3 text-sm"><option value="">Choose group</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.emoji} {group.name}</option>)}</select>
+          <div className="mt-3 grid grid-cols-3 rounded-xl bg-ink p-1">{(['equal','amount','percent'] as const).map((option) => <button key={option} onClick={() => setSplitMode(option)} className={cn('rounded-lg py-2 text-xs font-semibold capitalize', splitMode === option ? 'bg-ink-border-soft text-mint' : 'text-paper/40')}>{option}</button>)}</div>
+          <div className="mt-4 space-y-2">
+            {groups.find((group) => group.id === selectedGroupId)?.members?.filter((member) => member.user_id !== currentUserId).map((member) => {
+              const id = member.id ?? '';
+              const selected = selectedMemberIds.includes(id);
+              const name = member.profile?.full_name ?? member.contact_name ?? 'Member';
+              return <div key={id} className="flex items-center gap-3 rounded-xl border border-ink-border bg-ink p-3"><button type="button" onClick={() => id && setSelectedMemberIds((current) => selected ? current.filter((value) => value !== id) : [...current, id])} className={cn('flex h-7 w-7 items-center justify-center rounded-full border', selected ? 'border-mint bg-mint text-ink' : 'border-paper/20')}>{selected && <Check size={14} />}</button><span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>{selected && splitMode !== 'equal' && <div className="flex items-center gap-1"><input inputMode="decimal" value={customShares[id] ?? ''} onChange={(event) => setCustomShares((current) => ({ ...current, [id]: event.target.value }))} className="h-9 w-20 rounded-lg border border-ink-border bg-ink-raised px-2 text-right font-ledger text-sm" /><span className="text-xs text-paper/40">{splitMode === 'percent' ? '%' : '₹'}</span></div>}</div>;
+            })}
+          </div>
+          <button type="button" onClick={() => setSplitEditorOpen(false)} disabled={!selectedGroupId || selectedMemberIds.length === 0} className="mt-5 h-11 w-full rounded-xl bg-mint text-sm font-bold text-ink disabled:opacity-35">Apply split</button>
+        </section>
       </div>
     )}
   </>;

@@ -8,6 +8,7 @@ export interface Profile {
   email: string;
   avatar_color: string;
   monthly_budget: number | null;
+  upi_id?: string | null;
   created_at: string;
 }
 
@@ -75,6 +76,7 @@ export interface Subscription {
 export interface Group {
   id: string;
   owner_id: string;
+  created_by?: string;
   name: string;
   emoji: string;
   created_at: string;
@@ -82,11 +84,28 @@ export interface Group {
 }
 
 export interface GroupMember {
+  id?: string;
   group_id: string;
-  user_id: string;
+  user_id: string | null;
+  contact_name?: string | null;
+  phone?: string | null;
+  upi_id?: string | null;
   role: 'owner' | 'member';
   created_at: string;
   profile?: Profile;
+}
+
+export interface ExpenseSplit {
+  id: string;
+  transaction_id: string;
+  member_id: string;
+  share_amount: number;
+  share_percent: number | null;
+  is_settled: boolean;
+  settled_at: string | null;
+  created_at: string;
+  member?: GroupMember;
+  transaction?: Transaction;
 }
 
 export interface SplitShare {

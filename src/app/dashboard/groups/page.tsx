@@ -1,14 +1,16 @@
-import { getCurrentProfile, getDirectory, getGroups } from '@/lib/data/dashboard';
+import { getCurrentProfile, getDirectory, getExpenseSplits, getGroups } from '@/lib/data/dashboard';
 import { GroupsPanel } from '@/components/dashboard/GroupsPanel';
+import { GroupBalances } from '@/components/dashboard/GroupBalances';
 import { DirectoryUser } from '@/lib/types';
 
 export default async function GroupsPage() {
   const profile = await getCurrentProfile();
   if (!profile) return null;
 
-  const [groups, directory] = await Promise.all([
+  const [groups, directory, expenseSplits] = await Promise.all([
     getGroups(),
     getDirectory(),
+    getExpenseSplits(),
   ]);
 
   return (
@@ -24,7 +26,9 @@ export default async function GroupsPage() {
         groups={groups}
         directory={directory as DirectoryUser[]}
         currentUserId={profile.id}
+        currentUpiId={profile.upi_id}
       />
+      <div><h2 className="mb-3 text-lg font-bold">Group balances</h2><GroupBalances groups={groups} splits={expenseSplits} /></div>
     </div>
   );
 }

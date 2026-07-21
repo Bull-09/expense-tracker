@@ -273,7 +273,7 @@ export function AppShell({
         </div>
       )}
 
-      <CaptureSheet categories={categories} merchantRules={merchantRules} directory={directory} currentUserId={profile.id} />
+      <CaptureSheet categories={categories} merchantRules={merchantRules} directory={directory} groups={groups} currentUserId={profile.id} />
       {aiRequested && (
         <AiQuickAddModal categories={categories} directory={directory} groups={groups} currentUserId={profile.id} initiallyOpen />
       )}

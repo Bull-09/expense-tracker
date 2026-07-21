@@ -16,6 +16,7 @@ create table if not exists public.profiles (
   avatar_color text not null default '#3F7A5C',
   contact_owner_id uuid references auth.users(id) on delete cascade,
   monthly_budget numeric(12,2),
+  upi_id text,
   created_at timestamptz not null default now()
 );
 
@@ -189,6 +190,7 @@ create policy "Authenticated users manage transaction receipts" on public.transa
 create table if not exists public.groups (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles(id) on delete cascade,
+  created_by uuid not null references public.profiles(id) on delete cascade,
   name text not null,
   emoji text not null default '💸',
   created_at timestamptz not null default now()
@@ -197,12 +199,18 @@ create table if not exists public.groups (
 alter table public.groups enable row level security;
 
 create table if not exists public.group_members (
+  id uuid primary key default gen_random_uuid(),
   group_id uuid not null references public.groups(id) on delete cascade,
-  user_id uuid not null references public.profiles(id) on delete cascade,
+  user_id uuid references public.profiles(id) on delete cascade,
+  contact_name text,
+  phone text,
+  upi_id text,
   role text not null default 'member' check (role in ('owner', 'member')),
   created_at timestamptz not null default now(),
-  primary key (group_id, user_id)
+  constraint group_member_identity_check check (user_id is not null or nullif(trim(contact_name), '') is not null)
 );
+
+create unique index if not exists group_members_group_user_key on public.group_members(group_id, user_id) where user_id is not null;
 
 alter table public.group_members enable row level security;
 
@@ -367,6 +375,21 @@ create policy "Payer can delete split shares for their transactions"
 
 create index if not exists split_shares_owed_by_idx on public.split_shares (owed_by_id);
 create index if not exists split_shares_payer_idx on public.split_shares (payer_id);
+
+create table if not exists public.expense_splits (
+  id uuid primary key default gen_random_uuid(),
+  transaction_id uuid not null references public.transactions(id) on delete cascade,
+  member_id uuid not null references public.group_members(id) on delete cascade,
+  share_amount numeric(12,2) not null check (share_amount >= 0),
+  share_percent numeric(7,4),
+  is_settled boolean not null default false,
+  settled_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique(transaction_id, member_id)
+);
+alter table public.expense_splits enable row level security;
+create policy "Authenticated users manage expense splits" on public.expense_splits
+  for all to authenticated using (true) with check (true);
 
 create table if not exists public.split_reminders (
   id uuid primary key default gen_random_uuid(),

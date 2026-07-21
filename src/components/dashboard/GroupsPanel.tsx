@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { Check, Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { createGroup } from '@/app/actions/transactions';
+import { createGroup, updateProfileUpiId } from '@/app/actions/transactions';
 import { cn } from '@/lib/utils/format';
 import { DirectoryUser, Group } from '@/lib/types';
 
@@ -14,14 +14,21 @@ export function GroupsPanel({
   groups,
   directory,
   currentUserId,
+  currentUpiId,
 }: {
   groups: Group[];
   directory: DirectoryUser[];
   currentUserId: string;
+  currentUpiId?: string | null;
 }) {
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState(EMOJI_OPTIONS[0]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [contacts, setContacts] = useState<Array<{ name: string; phone: string; upiId: string }>>([]);
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactUpi, setContactUpi] = useState('');
+  const [myUpiId, setMyUpiId] = useState(currentUpiId ?? '');
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -45,10 +52,12 @@ export function GroupsPanel({
           name,
           emoji,
           memberIds: selectedMembers,
+          contacts,
         });
         setName('');
         setEmoji(EMOJI_OPTIONS[0]);
         setSelectedMembers([]);
+        setContacts([]);
         setCreated(true);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not create group.');
@@ -86,16 +95,16 @@ export function GroupsPanel({
               <div className="mt-4 flex flex-wrap gap-2">
                 {group.members?.map((member) => (
                   <div
-                    key={member.user_id}
+                    key={member.id ?? member.user_id}
                     className="flex items-center gap-2 rounded-full border border-ink-border bg-ink px-2.5 py-1.5 text-sm"
                   >
                     <span
                       className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold"
                       style={{ backgroundColor: member.profile?.avatar_color ?? '#3F7A5C' }}
                     >
-                      {(member.profile?.full_name ?? '?').charAt(0).toUpperCase()}
+                      {(member.profile?.full_name ?? member.contact_name ?? '?').charAt(0).toUpperCase()}
                     </span>
-                    <span className="max-w-32 truncate">{member.profile?.full_name ?? 'Member'}</span>
+                    <span className="max-w-32 truncate">{member.profile?.full_name ?? member.contact_name ?? 'Member'}</span>
                   </div>
                 ))}
               </div>
@@ -105,14 +114,17 @@ export function GroupsPanel({
       </div>
 
       <form onSubmit={handleSubmit} className="rounded-xl border border-ink-border bg-ink-raised p-5 h-fit">
+        <div className="mb-4 rounded-xl border border-mint/20 bg-mint/5 p-3"><label className="text-xs font-semibold uppercase tracking-wider text-paper/45">Your UPI ID</label><div className="mt-2 flex gap-2"><input value={myUpiId} onChange={(event) => setMyUpiId(event.target.value)} placeholder="name@bank" className="h-10 min-w-0 flex-1 rounded-lg border border-ink-border bg-ink px-3 text-sm" /><button type="button" onClick={() => startTransition(() => updateProfileUpiId(myUpiId))} className="rounded-lg bg-mint px-3 text-xs font-bold text-ink">Save</button></div></div>
         <div className="mb-5 flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald/15 text-emerald">
             <Plus size={18} />
           </div>
+
           <div>
             <h2 className="font-semibold">Create group</h2>
             <p className="text-sm text-paper/45">Keep shared expenses in the right circle.</p>
           </div>
+
         </div>
 
         <div className="flex flex-col gap-4">
@@ -178,6 +190,17 @@ export function GroupsPanel({
                 })}
               </div>
             )}
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium text-paper/70">Non-app contacts</p>
+            <div className="grid gap-2">
+              <input value={contactName} onChange={(event) => setContactName(event.target.value)} placeholder="Name" className="rounded-lg border border-ink-border bg-ink px-3 py-2 text-sm outline-none focus:border-mint" />
+              <input value={contactPhone} onChange={(event) => setContactPhone(event.target.value)} placeholder="Phone" inputMode="tel" className="rounded-lg border border-ink-border bg-ink px-3 py-2 text-sm outline-none focus:border-mint" />
+              <input value={contactUpi} onChange={(event) => setContactUpi(event.target.value)} placeholder="UPI ID" className="rounded-lg border border-ink-border bg-ink px-3 py-2 text-sm outline-none focus:border-mint" />
+            </div>
+            <button type="button" onClick={() => { if (!contactName.trim()) return; setContacts((current) => [...current, { name: contactName.trim(), phone: contactPhone.trim(), upiId: contactUpi.trim() }]); setContactName(''); setContactPhone(''); setContactUpi(''); }} className="mt-2 text-xs font-semibold text-mint">+ Add contact</button>
+            {contacts.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{contacts.map((contact, index) => <button key={`${contact.name}-${index}`} type="button" onClick={() => setContacts((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="rounded-full border border-ink-border px-2.5 py-1 text-xs text-paper/60">{contact.name} ×</button>)}</div>}
           </div>
 
           {error && (

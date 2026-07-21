@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { addMonths, addWeeks, format, isAfter, parseISO } from 'date-fns';
 import { inferCategory } from '@/lib/categories/auto';
-import { Profile, Transaction, SplitShare, Category, BalanceSummary, DashboardTotals, Group, Subscription, MerchantRule } from '@/lib/types';
+import { Profile, Transaction, SplitShare, Category, BalanceSummary, DashboardTotals, ExpenseSplit, Group, Subscription, MerchantRule } from '@/lib/types';
 
 function isMissingSchemaError(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? '';
@@ -203,6 +203,16 @@ export async function getGroups(): Promise<Group[]> {
   return (data as Group[]).filter((group) =>
     group.owner_id === user.id || group.members?.some((member) => member.user_id === user.id)
   );
+}
+
+export async function getExpenseSplits(): Promise<ExpenseSplit[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('expense_splits')
+    .select('*, member:group_members(*, profile:profiles(*)), transaction:transactions(*)')
+    .order('created_at', { ascending: false });
+  if (error && isMissingSchemaError(error)) return [];
+  return (data ?? []) as ExpenseSplit[];
 }
 
 export function computeTotals(transactions: Transaction[], splitShares: SplitShare[], userId: string): DashboardTotals {
