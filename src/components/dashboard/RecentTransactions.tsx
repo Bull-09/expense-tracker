@@ -7,12 +7,13 @@ import { format } from 'date-fns';
 import Link from 'next/link';
 import { ArrowLeftRight, ArrowUpRight, ArrowDownRight, PiggyBank } from 'lucide-react';
 import { useOptimisticTransactions } from '@/lib/transactions/optimistic';
+import { transactionTitle, transactionTypeLabel } from '@/lib/transactions/presentation';
 
 const kindConfig = {
   income: { icon: ArrowUpRight, color: 'text-mint', sign: '+' },
   expense: { icon: ArrowDownRight, color: 'text-peach', sign: '-' },
   investment: { icon: PiggyBank, color: 'text-sand', sign: '-' },
-  transfer: { icon: ArrowLeftRight, color: 'text-sky-300', sign: '' },
+  transfer: { icon: ArrowLeftRight, color: 'text-teal', sign: '' },
 };
 
 export function RecentTransactions({ transactions }: { transactions: Transaction[] }) {
@@ -45,11 +46,10 @@ export function RecentTransactions({ transactions }: { transactions: Transaction
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">
-                        {t.description || t.category?.name || 'Untitled'}
+                        {transactionTitle(t)}
                       </p>
                       <p className="text-xs text-paper/40">
-                        {t.category?.name ?? 'Uncategorized'} · {format(new Date(t.occurred_on), 'MMM d')}
-                        {t.is_split && ' · Split'}
+                        {transactionTypeLabel(t)} · {format(new Date(t.occurred_on), 'MMM d')}
                       </p>
                     </div>
                   </div>

@@ -9,19 +9,23 @@ import { deleteTransaction } from '@/app/actions/transactions';
 import { cn } from '@/lib/utils/format';
 import { EditTransactionModal } from './EditTransactionModal';
 import { useOptimisticTransactions } from '@/lib/transactions/optimistic';
+import { transactionTitle, transactionTypeLabel } from '@/lib/transactions/presentation';
 
 const kindConfig: Record<TransactionKind, { icon: typeof ArrowUpRight; color: string; sign: string }> = {
   income: { icon: ArrowUpRight, color: 'text-mint', sign: '+' },
   expense: { icon: ArrowDownRight, color: 'text-peach', sign: '-' },
   investment: { icon: PiggyBank, color: 'text-sand', sign: '-' },
-  transfer: { icon: ArrowLeftRight, color: 'text-sky-300', sign: '' },
+  transfer: { icon: ArrowLeftRight, color: 'text-teal', sign: '' },
 };
 
-const FILTERS: { label: string; value: TransactionKind | 'all' }[] = [
+type TransactionFilter = TransactionKind | 'split' | 'all';
+
+const FILTERS: { label: string; value: TransactionFilter }[] = [
   { label: 'All', value: 'all' },
   { label: 'Income', value: 'income' },
   { label: 'Expense', value: 'expense' },
   { label: 'Investment', value: 'investment' },
+  { label: 'Split', value: 'split' },
   { label: 'Transfers', value: 'transfer' },
 ];
 
@@ -95,12 +99,10 @@ const TransactionRow = memo(function TransactionRow({
         </div>
         <div className="min-w-0">
           <p className="text-sm font-medium truncate">
-            {transaction.description || transaction.category?.name || 'Untitled'}
+            {transactionTitle(transaction)}
           </p>
           <p className="text-xs text-paper/40">
-            {transaction.category?.name ?? 'Uncategorized'} · {format(new Date(transaction.occurred_on), 'MMM d, yyyy')}
-            {transaction.is_split && ' · Split'}
-            {transaction.source && ` · ${transaction.source}`}
+            {transactionTypeLabel(transaction)} · {format(new Date(transaction.occurred_on), 'MMM d, yyyy')}
           </p>
         </div>
       </div>
@@ -132,7 +134,7 @@ export function TransactionsList({
   groups: Group[];
   currentUserId: string;
 }) {
-  const [filter, setFilter] = useState<TransactionKind | 'all'>('all');
+  const [filter, setFilter] = useState<TransactionFilter>('all');
   const [datePreset, setDatePreset] = useState<DatePreset>('month');
   const initialMonthRange = getPresetRange('month');
   const [dateFrom, setDateFrom] = useState(initialMonthRange.from);
@@ -144,7 +146,7 @@ export function TransactionsList({
 
   const filtered = useMemo(
     () => visibleTransactions.filter((transaction) => {
-      const matchesKind = filter === 'all' || transaction.kind === filter;
+      const matchesKind = filter === 'all' || (filter === 'split' ? transaction.is_split : transaction.kind === filter);
       return matchesKind && transactionInRange(transaction, dateFrom, dateTo);
     }),
     [visibleTransactions, filter, dateFrom, dateTo]

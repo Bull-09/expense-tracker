@@ -236,8 +236,11 @@ export async function createFriendLedgerEntry(input: {
   if (!person) throw new Error('Friend not found. Add their name again and save.');
 
   const borrowed = input.direction === 'borrowed';
-  const description = input.description?.trim()
-    || (borrowed ? `Borrowed from ${person.full_name}` : `Lent to ${person.full_name}`);
+  const note = input.description?.trim();
+  const directionLabel = borrowed ? `from ${person.full_name}` : `to ${person.full_name}`;
+  const description = note
+    ? (note.toLocaleLowerCase().includes(person.full_name.toLocaleLowerCase()) ? note : `${note} ${directionLabel}`)
+    : (borrowed ? `Borrowed from ${person.full_name}` : `Lent to ${person.full_name}`);
 
   const { data: transaction, error } = await supabase
     .from('transactions')
