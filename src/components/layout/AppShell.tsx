@@ -22,6 +22,7 @@ import {
 import { useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { AiQuickAddModal } from '@/components/dashboard/AiQuickAddModal';
+import { CaptureSheet } from '@/components/dashboard/CaptureSheet';
 import { Category, DirectoryUser, Group, Profile } from '@/lib/types';
 
 const PRIMARY_NAV = [
@@ -75,11 +76,15 @@ export function AppShell({
     window.dispatchEvent(new Event('c137:open-capture'));
   }
 
+  function openVoiceCapture() {
+    window.dispatchEvent(new Event('c137:open-ai-capture'));
+  }
+
   function startLongPress() {
     longPressed.current = false;
     pressTimer.current = setTimeout(() => {
       longPressed.current = true;
-      openCapture();
+      openVoiceCapture();
     }, 500);
   }
 
@@ -233,6 +238,7 @@ export function AppShell({
         </div>
       )}
 
+      <CaptureSheet categories={categories} directory={directory} currentUserId={profile.id} />
       <AiQuickAddModal categories={categories} directory={directory} groups={groups} currentUserId={profile.id} />
     </div>
   );

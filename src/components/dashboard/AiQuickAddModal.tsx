@@ -340,8 +340,8 @@ export function AiQuickAddModal({
       window.requestAnimationFrame(() => textareaRef.current?.focus());
     }
 
-    window.addEventListener('c137:open-capture', openCapture);
-    return () => window.removeEventListener('c137:open-capture', openCapture);
+    window.addEventListener('c137:open-ai-capture', openCapture);
+    return () => window.removeEventListener('c137:open-ai-capture', openCapture);
   }, []);
 
   function resolveFriendDraft(item: FriendLedgerDraft): FriendLedgerDraft {
