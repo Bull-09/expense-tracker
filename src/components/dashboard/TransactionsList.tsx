@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useTransition } from 'react';
+import { memo, useCallback, useState, useMemo, useTransition } from 'react';
 import { Category, DirectoryUser, Group, Transaction, TransactionKind } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils/format';
 import { endOfMonth, endOfWeek, format, isWithinInterval, parseISO, startOfMonth, startOfWeek, subDays } from 'date-fns';
@@ -8,6 +8,7 @@ import { ArrowLeftRight, ArrowUpRight, ArrowDownRight, CalendarDays, PiggyBank, 
 import { deleteTransaction } from '@/app/actions/transactions';
 import { cn } from '@/lib/utils/format';
 import { EditTransactionModal } from './EditTransactionModal';
+import { useOptimisticTransactions } from '@/lib/transactions/optimistic';
 
 const kindConfig: Record<TransactionKind, { icon: typeof ArrowUpRight; color: string; sign: string }> = {
   income: { icon: ArrowUpRight, color: 'text-emerald', sign: '+' },
@@ -72,6 +73,52 @@ function transactionInRange(transaction: Transaction, from: string, to: string) 
   return isWithinInterval(date, { start, end });
 }
 
+const TransactionRow = memo(function TransactionRow({
+  transaction,
+  deleting,
+  onEdit,
+  onDelete,
+}: {
+  transaction: Transaction;
+  deleting: boolean;
+  onEdit: (transaction: Transaction) => void;
+  onDelete: (id: string) => void;
+}) {
+  const config = kindConfig[transaction.kind] ?? kindConfig.transfer;
+  const Icon = config.icon;
+
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-ink-border">
+          <Icon size={16} className={config.color} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium truncate">
+            {transaction.description || transaction.category?.name || 'Untitled'}
+          </p>
+          <p className="text-xs text-paper/40">
+            {transaction.category?.name ?? 'Uncategorized'} · {format(new Date(transaction.occurred_on), 'MMM d, yyyy')}
+            {transaction.is_split && ' · Split'}
+            {transaction.source && ` · ${transaction.source}`}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <span className={`font-ledger text-sm font-semibold ${config.color}`}>
+          {config.sign}{formatCurrency(transaction.amount, transaction.currency)}
+        </span>
+        <button onClick={() => onEdit(transaction)} className="text-paper/30 hover:text-emerald p-1" aria-label="Edit transaction">
+          <Pencil size={15} />
+        </button>
+        <button onClick={() => onDelete(transaction.id)} disabled={deleting} className="text-paper/30 hover:text-clay p-1 disabled:opacity-40" aria-label="Delete transaction">
+          <Trash2 size={15} />
+        </button>
+      </div>
+    </div>
+  );
+});
+
 export function TransactionsList({
   transactions,
   categories,
@@ -93,13 +140,14 @@ export function TransactionsList({
   const [isPending, startTransition] = useTransition();
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const visibleTransactions = useOptimisticTransactions(transactions);
 
   const filtered = useMemo(
-    () => transactions.filter((transaction) => {
+    () => visibleTransactions.filter((transaction) => {
       const matchesKind = filter === 'all' || transaction.kind === filter;
       return matchesKind && transactionInRange(transaction, dateFrom, dateTo);
     }),
-    [transactions, filter, dateFrom, dateTo]
+    [visibleTransactions, filter, dateFrom, dateTo]
   );
 
   const rangeTotals = useMemo(() => {
@@ -131,13 +179,15 @@ export function TransactionsList({
     ? `${dateFrom ? format(parseISO(dateFrom), 'MMM d, yyyy') : 'Start'} - ${dateTo ? format(parseISO(dateTo), 'MMM d, yyyy') : 'Today'}`
     : 'All time';
 
-  function handleDelete(id: string) {
+  const handleDelete = useCallback((id: string) => {
     setPendingDelete(id);
     startTransition(async () => {
       await deleteTransaction(id);
       setPendingDelete(null);
     });
-  }
+  }, []);
+
+  const handleEdit = useCallback((transaction: Transaction) => setEditing(transaction), []);
 
   return (
     <div className="flex flex-col gap-4">
@@ -239,50 +289,15 @@ export function TransactionsList({
         </div>
       ) : (
         <div className="rounded-xl border border-ink-border bg-ink-raised divide-y divide-ink-border">
-          {filtered.map((t) => {
-            const config = kindConfig[t.kind] ?? kindConfig.transfer;
-            const Icon = config.icon;
-            const deleting = isPending && pendingDelete === t.id;
-            return (
-              <div key={t.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-ink-border">
-                    <Icon size={16} className={config.color} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {t.description || t.category?.name || 'Untitled'}
-                    </p>
-                    <p className="text-xs text-paper/40">
-                      {t.category?.name ?? 'Uncategorized'} · {format(new Date(t.occurred_on), 'MMM d, yyyy')}
-                      {t.is_split && ' · Split'}
-                      {t.source && ` · ${t.source}`}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className={`font-ledger text-sm font-semibold ${config.color}`}>
-                    {config.sign}{formatCurrency(t.amount, t.currency)}
-                  </span>
-                  <button
-                    onClick={() => setEditing(t)}
-                    className="text-paper/30 hover:text-emerald p-1"
-                    aria-label="Edit transaction"
-                  >
-                    <Pencil size={15} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(t.id)}
-                    disabled={deleting}
-                    className="text-paper/30 hover:text-clay p-1 disabled:opacity-40"
-                    aria-label="Delete transaction"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          {filtered.map((transaction) => (
+            <TransactionRow
+              key={transaction.id}
+              transaction={transaction}
+              deleting={isPending && pendingDelete === transaction.id}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
+          ))}
         </div>
       )}
       {editing && (

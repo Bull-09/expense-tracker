@@ -1,9 +1,12 @@
+'use client';
+
 import { Transaction } from '@/lib/types';
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/Card';
 import { formatCurrency } from '@/lib/utils/format';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { ArrowLeftRight, ArrowUpRight, ArrowDownRight, PiggyBank } from 'lucide-react';
+import { useOptimisticTransactions } from '@/lib/transactions/optimistic';
 
 const kindConfig = {
   income: { icon: ArrowUpRight, color: 'text-emerald', sign: '+' },
@@ -13,7 +16,8 @@ const kindConfig = {
 };
 
 export function RecentTransactions({ transactions }: { transactions: Transaction[] }) {
-  const recent = transactions.slice(0, 8);
+  const visibleTransactions = useOptimisticTransactions(transactions);
+  const recent = visibleTransactions.slice(0, 8);
 
   return (
     <Card>

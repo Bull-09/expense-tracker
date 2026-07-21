@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { TransactionKind } from '@/lib/types';
+import { Transaction, TransactionKind } from '@/lib/types';
 import { inferCategory } from '@/lib/categories/auto';
 import { format } from 'date-fns';
 
@@ -168,6 +168,8 @@ export async function createTransaction(input: {
   revalidatePath('/dashboard');
   revalidatePath('/dashboard/transactions');
   revalidatePath('/dashboard/splits');
+
+  return transaction as Transaction;
 }
 
 export async function createFriendLedgerEntry(input: {

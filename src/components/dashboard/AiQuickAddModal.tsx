@@ -275,15 +275,17 @@ export function AiQuickAddModal({
   directory,
   groups,
   currentUserId,
+  initiallyOpen = false,
 }: {
   categories: Category[];
   directory: DirectoryUser[];
   groups: Group[];
   currentUserId: string;
   onClose?: () => void;
+  initiallyOpen?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen);
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -343,6 +345,10 @@ export function AiQuickAddModal({
     window.addEventListener('c137:open-ai-capture', openCapture);
     return () => window.removeEventListener('c137:open-ai-capture', openCapture);
   }, []);
+
+  useEffect(() => {
+    if (initiallyOpen) window.requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [initiallyOpen]);
 
   function resolveFriendDraft(item: FriendLedgerDraft): FriendLedgerDraft {
     const friendDirectory = directory.filter((person) => person.id !== currentUserId);

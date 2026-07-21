@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   BarChart3,
@@ -19,11 +20,15 @@ import {
   WalletCards,
   X,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { AiQuickAddModal } from '@/components/dashboard/AiQuickAddModal';
 import { CaptureSheet } from '@/components/dashboard/CaptureSheet';
 import { Category, DirectoryUser, Group, Profile } from '@/lib/types';
+
+const AiQuickAddModal = dynamic(
+  () => import('@/components/dashboard/AiQuickAddModal').then((module) => module.AiQuickAddModal),
+  { ssr: false }
+);
 
 const PRIMARY_NAV = [
   { href: '/dashboard', label: 'Home', icon: Home },
@@ -67,12 +72,38 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const [moreOpen, setMoreOpen] = useState(false);
+  const [aiRequested, setAiRequested] = useState(false);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressed = useRef(false);
 
+  useEffect(() => {
+    const routes = [...new Set([...DESKTOP_NAV.map((item) => item.href), '/dashboard/settings'])];
+    const warmRoutes = () => routes.forEach((route) => router.prefetch(route));
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (idleWindow.requestIdleCallback) {
+      const idleId = idleWindow.requestIdleCallback(warmRoutes, { timeout: 1500 });
+      return () => idleWindow.cancelIdleCallback?.(idleId);
+    }
+    const timeoutId = setTimeout(warmRoutes, 500);
+    return () => clearTimeout(timeoutId);
+  }, [router]);
+
+  useEffect(() => {
+    function requestAiCapture() {
+      setAiRequested(true);
+    }
+
+    window.addEventListener('c137:open-ai-capture', requestAiCapture);
+    return () => window.removeEventListener('c137:open-ai-capture', requestAiCapture);
+  }, []);
+
   function openCapture() {
+    performance.mark('c137-capture-requested');
     window.dispatchEvent(new Event('c137:open-capture'));
   }
 
@@ -115,6 +146,7 @@ export function AppShell({
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 title={item.label}
                 className={`flex h-11 items-center justify-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors xl:justify-start ${
                   active ? 'bg-mint/12 text-mint' : 'text-paper/55 hover:bg-ink-border-soft/60 hover:text-paper'
@@ -170,7 +202,7 @@ export function AppShell({
           const Icon = item.icon;
           const active = isActive(pathname, item.href);
           return (
-            <Link key={item.href} href={item.href} className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium ${active ? 'text-mint' : 'text-paper/45'}`}>
+            <Link key={item.href} href={item.href} prefetch={true} className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium ${active ? 'text-mint' : 'text-paper/45'}`}>
               <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
               {item.label}
             </Link>
@@ -193,7 +225,7 @@ export function AppShell({
           <span className="mt-9 text-[10px] font-semibold text-mint">Capture</span>
         </button>
 
-        <Link href="/dashboard/splits" className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium ${isActive(pathname, '/dashboard/splits') ? 'text-mint' : 'text-paper/45'}`}>
+        <Link href="/dashboard/splits" prefetch={true} className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium ${isActive(pathname, '/dashboard/splits') ? 'text-mint' : 'text-paper/45'}`}>
           <Handshake size={20} strokeWidth={isActive(pathname, '/dashboard/splits') ? 2.5 : 1.8} />
           Splits
         </Link>
@@ -219,7 +251,7 @@ export function AppShell({
               {MORE_ITEMS.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <Link key={item.label} href={item.href} onClick={() => setMoreOpen(false)} className="flex items-center gap-3 rounded-xl border border-ink-border bg-ink p-3 text-sm font-medium text-paper/75">
+                  <Link key={item.label} href={item.href} prefetch={true} onClick={() => setMoreOpen(false)} className="flex items-center gap-3 rounded-xl border border-ink-border bg-ink p-3 text-sm font-medium text-paper/75">
                     <Icon size={18} className="text-mint" />
                     {item.label}
                   </Link>
@@ -239,7 +271,9 @@ export function AppShell({
       )}
 
       <CaptureSheet categories={categories} directory={directory} currentUserId={profile.id} />
-      <AiQuickAddModal categories={categories} directory={directory} groups={groups} currentUserId={profile.id} />
+      {aiRequested && (
+        <AiQuickAddModal categories={categories} directory={directory} groups={groups} currentUserId={profile.id} initiallyOpen />
+      )}
     </div>
   );
 }

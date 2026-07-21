@@ -1,11 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Check, Delete, Mic, ReceiptText, ScanLine, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createTransaction } from '@/app/actions/transactions';
-import { Category, DirectoryUser, TransactionKind } from '@/lib/types';
+import { Category, DirectoryUser, Transaction, TransactionKind } from '@/lib/types';
 import { cn, formatCurrency } from '@/lib/utils/format';
+import {
+  confirmOptimisticTransaction,
+  publishOptimisticTransaction,
+  rollbackOptimisticTransaction,
+} from '@/lib/transactions/optimistic';
 
 type KeypadKind = Extract<TransactionKind, 'expense' | 'income' | 'investment'>;
 
@@ -46,13 +51,17 @@ export function CaptureSheet({
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sheetRootRef = useRef<HTMLDivElement | null>(null);
 
   const relevantCategories = useMemo(
     () => categories.filter((category) => category.kind === (kind === 'income' ? 'income' : 'expense')),
     [categories, kind]
   );
   const selectedCategory = relevantCategories.find((category) => category.id === categoryId) ?? relevantCategories[0];
-  const friends = directory.filter((person) => person.id !== currentUserId);
+  const friends = useMemo(
+    () => directory.filter((person) => person.id !== currentUserId),
+    [currentUserId, directory]
+  );
   const numericAmount = Number.parseFloat(amount) || 0;
   const equalShare = numericAmount / (selectedFriends.length + 1);
 
@@ -82,6 +91,18 @@ export function CaptureSheet({
     };
   }, [open]);
 
+  useLayoutEffect(() => {
+    if (!open) return;
+    const frame = window.requestAnimationFrame(() => {
+      const requested = performance.getEntriesByName('c137-capture-requested').at(-1);
+      if (!requested || !sheetRootRef.current) return;
+      const duration = performance.now() - requested.startTime;
+      sheetRootRef.current.dataset.openMs = duration.toFixed(1);
+      performance.measure('c137-capture-open', { start: requested.startTime, end: performance.now() });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
   function reset() {
     setKind('expense');
     setAmount('');
@@ -100,42 +121,105 @@ export function CaptureSheet({
     window.setTimeout(() => window.dispatchEvent(new Event('c137:open-ai-capture')), 0);
   }
 
-  function toggleFriend(id: string) {
+  const toggleFriend = useCallback((id: string) => {
     setSelectedFriends((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-  }
+  }, []);
+
+  const categoryChips = useMemo(() => relevantCategories.map((category) => {
+    const selected = category.id === selectedCategory?.id;
+    return (
+      <button
+        key={category.id}
+        type="button"
+        onClick={() => setCategoryId(category.id)}
+        className={cn('flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium', selected ? 'border-mint/60 bg-mint/10 text-mint' : 'border-ink-border text-paper/50')}
+      >
+        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: category.color }} />
+        {category.name}
+        {selected && <Check size={13} />}
+      </button>
+    );
+  }), [relevantCategories, selectedCategory?.id]);
+
+  const friendChips = useMemo(() => friends.map((friend) => {
+    const selected = selectedFriends.includes(friend.id);
+    return (
+      <button key={friend.id} type="button" onClick={() => toggleFriend(friend.id)} className="flex w-14 shrink-0 flex-col items-center gap-1.5 text-center">
+        <span className={cn('relative flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-semibold text-ink', selected ? 'border-mint' : 'border-transparent')} style={{ backgroundColor: friend.avatar_color }}>
+          {friend.full_name.charAt(0).toUpperCase()}
+          {selected && <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-mint text-ink"><Check size={10} strokeWidth={3} /></span>}
+        </span>
+        <span className={cn('w-full truncate text-[10px]', selected ? 'text-mint' : 'text-paper/40')}>{friend.full_name.split(' ')[0]}</span>
+      </button>
+    );
+  }), [friends, selectedFriends, toggleFriend]);
 
   async function save() {
     if (numericAmount <= 0 || submitting) return;
     setSubmitting(true);
     setError(null);
 
+    const temporaryId = `optimistic-${crypto.randomUUID()}`;
+    const occurredOn = new Date().toISOString().slice(0, 10);
+    const finalDescription = description.trim() || selectedCategory?.name || (kind === 'income' ? 'Income' : kind === 'investment' ? 'Investment' : 'Expense');
+    const optimisticTransaction: Transaction = {
+      id: temporaryId,
+      user_id: currentUserId,
+      group_id: null,
+      subscription_id: null,
+      kind,
+      category_id: selectedCategory?.id ?? null,
+      amount: numericAmount,
+      currency: 'INR',
+      description: finalDescription,
+      source: null,
+      occurred_on: occurredOn,
+      is_split: kind === 'expense' && selectedFriends.length > 0,
+      created_at: new Date().toISOString(),
+      category: selectedCategory ?? null,
+    };
+
+    publishOptimisticTransaction(optimisticTransaction);
+    close();
+
     try {
-      await createTransaction({
+      const transaction = await createTransaction({
         kind,
         categoryId: selectedCategory?.id ?? null,
         amount: numericAmount,
-        description: description.trim() || selectedCategory?.name || (kind === 'income' ? 'Income' : kind === 'investment' ? 'Investment' : 'Expense'),
-        occurredOn: new Date().toISOString().slice(0, 10),
+        description: finalDescription,
+        occurredOn,
         splits: kind === 'expense' && selectedFriends.length > 0
           ? selectedFriends.map((userId) => ({ userId, amount: equalShare }))
           : undefined,
       });
-      close();
+      confirmOptimisticTransaction(temporaryId, { ...transaction, category: selectedCategory ?? null });
       reset();
       router.refresh();
     } catch (saveError) {
+      rollbackOptimisticTransaction(temporaryId);
       setError(saveError instanceof Error ? saveError.message : 'Could not save this entry.');
+      setOpen(true);
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/65 backdrop-blur-sm md:items-center md:p-5" role="dialog" aria-modal="true" aria-labelledby="capture-title">
+    <div
+      ref={sheetRootRef}
+      className={cn(
+        'fixed inset-0 z-[70] flex items-end justify-center bg-black/65 backdrop-blur-sm transition-[opacity,visibility] duration-[90ms] md:items-center md:p-5',
+        open ? 'visible opacity-100' : 'invisible pointer-events-none opacity-0'
+      )}
+      role={open ? 'dialog' : undefined}
+      aria-modal={open ? true : undefined}
+      aria-labelledby={open ? 'capture-title' : undefined}
+      aria-hidden={!open}
+      inert={!open}
+    >
       <button type="button" className="absolute inset-0" onClick={close} aria-label="Close capture" />
-      <section className="relative flex max-h-[96dvh] w-full flex-col overflow-hidden rounded-t-[28px] border border-ink-border bg-ink-raised shadow-2xl md:max-h-[92dvh] md:max-w-[520px] md:rounded-[28px]">
+      <section className={cn('relative flex max-h-[96dvh] w-full flex-col overflow-hidden rounded-t-[28px] border border-ink-border bg-ink-raised shadow-2xl transition-transform duration-[90ms] md:max-h-[92dvh] md:max-w-[520px] md:rounded-[28px]', open ? 'translate-y-0' : 'translate-y-3')}>
         <div className="flex items-center justify-between border-b border-ink-border px-5 py-4">
           <button type="button" onClick={close} className="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-paper/60 md:hidden" aria-label="Back">
             <ArrowLeft size={18} />
@@ -209,21 +293,7 @@ export function CaptureSheet({
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-paper/35">Category</p>
             {relevantCategories.length > 0 ? (
               <div className="flex gap-2 overflow-x-auto pb-1 thin-scroll">
-                {relevantCategories.map((category) => {
-                  const selected = category.id === selectedCategory?.id;
-                  return (
-                    <button
-                      key={category.id}
-                      type="button"
-                      onClick={() => setCategoryId(category.id)}
-                      className={cn('flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium', selected ? 'border-mint/60 bg-mint/10 text-mint' : 'border-ink-border text-paper/50')}
-                    >
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: category.color }} />
-                      {category.name}
-                      {selected && <Check size={13} />}
-                    </button>
-                  );
-                })}
+                {categoryChips}
               </div>
             ) : <p className="text-sm text-paper/40">This entry will be saved uncategorized.</p>}
           </div>
@@ -235,18 +305,7 @@ export function CaptureSheet({
                 {selectedFriends.length > 0 && numericAmount > 0 && <span className="font-ledger text-xs font-semibold text-mint">{formatCurrency(equalShare)} each</span>}
               </div>
               <div className="flex gap-2 overflow-x-auto pb-1">
-                {friends.map((friend) => {
-                  const selected = selectedFriends.includes(friend.id);
-                  return (
-                    <button key={friend.id} type="button" onClick={() => toggleFriend(friend.id)} className="flex w-14 shrink-0 flex-col items-center gap-1.5 text-center">
-                      <span className={cn('relative flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-semibold text-ink', selected ? 'border-mint' : 'border-transparent')} style={{ backgroundColor: friend.avatar_color }}>
-                        {friend.full_name.charAt(0).toUpperCase()}
-                        {selected && <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-mint text-ink"><Check size={10} strokeWidth={3} /></span>}
-                      </span>
-                      <span className={cn('w-full truncate text-[10px]', selected ? 'text-mint' : 'text-paper/40')}>{friend.full_name.split(' ')[0]}</span>
-                    </button>
-                  );
-                })}
+                {friendChips}
               </div>
             </div>
           )}
