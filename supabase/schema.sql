@@ -168,6 +168,20 @@ create policy "Users manage their own transactions"
 create index if not exists transactions_user_date_idx
   on public.transactions (user_id, occurred_on desc);
 
+create table if not exists public.transaction_receipts (
+  id uuid primary key default gen_random_uuid(),
+  transaction_id uuid not null references public.transactions(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  storage_path text not null,
+  merchant text,
+  line_items jsonb not null default '[]'::jsonb,
+  confidence numeric,
+  created_at timestamptz not null default now()
+);
+alter table public.transaction_receipts enable row level security;
+create policy "Authenticated users manage transaction receipts" on public.transaction_receipts
+  for all to authenticated using (true) with check (true);
+
 -- ----------------------------------------------------------------------------
 -- 3B. GROUPS
 -- Friend circles for flatmates, trips, couples, events, and shared costs.

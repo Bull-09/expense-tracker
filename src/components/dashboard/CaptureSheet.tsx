@@ -1,13 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, Delete, Mic, ReceiptText, RotateCcw, ScanLine, Square, X } from 'lucide-react';
+import { ArrowLeft, Camera, Check, Delete, ImagePlus, Mic, ReceiptText, RotateCcw, ScanLine, Square, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { createTransaction, deleteTransaction } from '@/app/actions/transactions';
 import { learnMerchantRule } from '@/app/actions/categories';
 import { Category, DirectoryUser, MerchantRule, Transaction, TransactionKind } from '@/lib/types';
 import { matchMerchantRule } from '@/lib/categories/rules';
 import { parseVoiceTranscript } from '@/lib/capture/voice';
+import { prepareReceiptImage } from '@/lib/capture/image';
+import { createClient } from '@/lib/supabase/client';
 import { cn, formatCurrency } from '@/lib/utils/format';
 import {
   confirmOptimisticTransaction,
@@ -58,10 +61,11 @@ export function CaptureSheet({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<'keypad' | 'voice'>('keypad');
+  const [mode, setMode] = useState<'keypad' | 'voice' | 'scan'>('keypad');
   const [kind, setKind] = useState<KeypadKind>('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [occurredOn, setOccurredOn] = useState(() => new Date().toISOString().slice(0, 10));
   const [categoryId, setCategoryId] = useState('');
   const [categoryWasChosen, setCategoryWasChosen] = useState(false);
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
@@ -75,7 +79,11 @@ export function CaptureSheet({
   const [resolution, setResolution] = useState<'local' | 'llm' | null>(null);
   const [countdown, setCountdown] = useState(3);
   const [editVersion, setEditVersion] = useState(0);
-  const [undoItem, setUndoItem] = useState<{ id: string; description: string } | null>(null);
+  const [undoItem, setUndoItem] = useState<{ id: string; description: string; receiptPath?: string } | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [receiptMeta, setReceiptMeta] = useState<{ merchant: string; lineItems: unknown[]; confidence: number | null } | null>(null);
+  const [scanning, setScanning] = useState(false);
   const sheetRootRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const saveRef = useRef<() => Promise<void>>(async () => undefined);
@@ -146,6 +154,7 @@ export function CaptureSheet({
     setKind('expense');
     setAmount('');
     setDescription('');
+    setOccurredOn(new Date().toISOString().slice(0, 10));
     setCategoryId('');
     setCategoryWasChosen(false);
     setSelectedFriends([]);
@@ -155,6 +164,10 @@ export function CaptureSheet({
     setVoiceDraftReady(false);
     setResolution(null);
     setCountdown(3);
+    setReceiptFile(null);
+    if (receiptPreview) URL.revokeObjectURL(receiptPreview);
+    setReceiptPreview(null);
+    setReceiptMeta(null);
   }
 
   function close() {
@@ -169,6 +182,44 @@ export function CaptureSheet({
     const available = Boolean(speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition);
     setSpeechAvailable(available);
     if (!available) setError('Voice capture is not supported in this browser. Use the keypad to add this entry.');
+  }
+
+  function selectScan() {
+    recognitionRef.current?.stop();
+    setMode('scan');
+    setError(null);
+  }
+
+  async function scanImage(file: File) {
+    if (!file.type.startsWith('image/')) { setError('Choose a photo or screenshot image.'); return; }
+    setScanning(true); setError(null); setVoiceDraftReady(false);
+    if (receiptPreview) URL.revokeObjectURL(receiptPreview);
+    const preview = URL.createObjectURL(file);
+    setReceiptPreview(preview);
+    try {
+      const prepared = await prepareReceiptImage(file);
+      setReceiptFile(prepared);
+      const form = new FormData(); form.append('image', prepared);
+      const response = await fetch('/api/ai/receipt-scan', { method: 'POST', body: form });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? 'Could not scan this image.');
+      const merchant = typeof data.merchant === 'string' ? data.merchant : '';
+      const merchantMatch = matchMerchantRule(merchant, merchantRules);
+      const suggested = categories.find((category) => category.kind === 'expense' && category.name.toLowerCase() === String(data.suggestedCategory ?? '').toLowerCase());
+      const resolvedCategoryId = merchantMatch?.rule.category_id ?? suggested?.id ?? '';
+      setKind('expense'); setAmount(data.total ? String(data.total) : ''); setDescription(merchant || 'Receipt'); setCategoryId(resolvedCategoryId);
+      if (typeof data.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.date)) setOccurredOn(data.date);
+      setReceiptMeta({ merchant, lineItems: Array.isArray(data.lineItems) ? data.lineItems : [], confidence: typeof data.confidence === 'number' ? data.confidence : null });
+      setResolution('llm'); setVoiceDraftReady(true); setCountdown(3);
+      const method = merchantMatch ? 'llm+local-rule' : 'llm';
+      const log = { source: 'scan', method, confidence: data.confidence ?? null, tokens: data.usage?.totalTokens ?? null, at: new Date().toISOString() };
+      console.info('[capture-resolution]', log);
+      try { const prior = JSON.parse(localStorage.getItem('c137:capture-resolution-log') ?? '[]'); localStorage.setItem('c137:capture-resolution-log', JSON.stringify([log, ...(Array.isArray(prior) ? prior : [])].slice(0, 100))); } catch { /* non-blocking */ }
+      if (!data.total || !resolvedCategoryId) setError('Some fields are unclear. Review the image and complete the draft manually.');
+    } catch (reason) {
+      setKind('expense'); setAmount(''); setDescription(''); setCategoryId(''); setReceiptMeta(null); setVoiceDraftReady(true);
+      setError(reason instanceof Error ? reason.message : 'Could not read this image. Fill the fields manually.');
+    } finally { setScanning(false); }
   }
 
   function markEdited() {
@@ -281,7 +332,6 @@ export function CaptureSheet({
     setError(null);
 
     const temporaryId = `optimistic-${crypto.randomUUID()}`;
-    const occurredOn = new Date().toISOString().slice(0, 10);
     const finalDescription = description.trim() || selectedCategory?.name || (kind === 'income' ? 'Income' : kind === 'investment' ? 'Investment' : 'Expense');
     const optimisticTransaction: Transaction = {
       id: temporaryId,
@@ -302,6 +352,7 @@ export function CaptureSheet({
 
     publishOptimisticTransaction(optimisticTransaction);
     close();
+    let storedReceiptPath: string | undefined;
 
     try {
       const transaction = await createTransaction({
@@ -314,12 +365,28 @@ export function CaptureSheet({
           ? selectedFriends.map((userId) => ({ userId, amount: equalShare }))
           : undefined,
       });
+      if (receiptFile && mode === 'scan') {
+        const supabase = createClient();
+        const path = `${currentUserId}/${transaction.id}/${crypto.randomUUID()}.jpg`;
+        const { error: uploadError } = await supabase.storage.from('receipts').upload(path, receiptFile, { contentType: receiptFile.type, upsert: false });
+        if (uploadError) {
+          await deleteTransaction(transaction.id);
+          throw new Error(`Receipt upload failed: ${uploadError.message}`);
+        }
+        const { error: linkError } = await supabase.from('transaction_receipts').insert({ transaction_id: transaction.id, user_id: currentUserId, storage_path: path, merchant: receiptMeta?.merchant || null, line_items: receiptMeta?.lineItems ?? [], confidence: receiptMeta?.confidence ?? null });
+        if (linkError) {
+          await supabase.storage.from('receipts').remove([path]);
+          await deleteTransaction(transaction.id);
+          throw new Error(`Receipt linking failed: ${linkError.message}`);
+        }
+        storedReceiptPath = path;
+      }
       if (kind === 'expense' && categoryWasChosen && description.trim() && selectedCategory) {
         void learnMerchantRule({ text: description, categoryId: selectedCategory.id }).catch(() => undefined);
       }
       confirmOptimisticTransaction(temporaryId, { ...transaction, category: selectedCategory ?? null });
       if (autoSave) {
-        setUndoItem({ id: transaction.id, description: finalDescription });
+        setUndoItem({ id: transaction.id, description: finalDescription, receiptPath: storedReceiptPath });
         window.setTimeout(() => setUndoItem((current) => current?.id === transaction.id ? null : current), 3000);
       }
       reset();
@@ -338,7 +405,7 @@ export function CaptureSheet({
   });
 
   useEffect(() => {
-    if (!open || mode !== 'voice' || !voiceDraftReady || numericAmount <= 0 || !categoryId || !selectedCategory || submitting) return;
+    if (!open || (mode !== 'voice' && mode !== 'scan') || !voiceDraftReady || numericAmount <= 0 || !categoryId || !selectedCategory || submitting) return;
     const startedAt = Date.now();
     const interval = window.setInterval(() => setCountdown(Math.max(0, 3 - Math.floor((Date.now() - startedAt) / 1000))), 250);
     const timeout = window.setTimeout(() => void saveRef.current(), 3000);
@@ -350,6 +417,7 @@ export function CaptureSheet({
     const item = undoItem;
     setUndoItem(null);
     try {
+      if (item.receiptPath) await createClient().storage.from('receipts').remove([item.receiptPath]);
       await deleteTransaction(item.id);
       removeOptimisticTransaction(item.id);
       router.refresh();
@@ -394,7 +462,7 @@ export function CaptureSheet({
           <button type="button" role="tab" aria-selected={mode === 'voice'} onClick={selectVoice} className={cn('flex h-12 items-center justify-center gap-2 border-b-2 text-sm font-medium', mode === 'voice' ? 'border-mint text-mint' : 'border-transparent text-paper/55 hover:text-paper')}>
             <Mic size={17} /> Voice
           </button>
-          <button type="button" role="tab" aria-selected="false" disabled className="flex h-12 cursor-not-allowed items-center justify-center gap-2 border-b-2 border-transparent text-sm font-medium text-paper/25" title="Coming soon">
+          <button type="button" role="tab" aria-selected={mode === 'scan'} onClick={selectScan} className={cn('flex h-12 items-center justify-center gap-2 border-b-2 text-sm font-medium', mode === 'scan' ? 'border-mint text-mint' : 'border-transparent text-paper/55 hover:text-paper')}>
             <ScanLine size={17} /> Scan
           </button>
         </div>
@@ -427,13 +495,26 @@ export function CaptureSheet({
             </div>
           )}
 
-          {(mode === 'keypad' || voiceDraftReady) && <>
-          {mode === 'voice' && voiceDraftReady && (
-            <div className="mb-2 flex items-center justify-between rounded-xl border border-mint/25 bg-mint/10 px-3 py-2 text-xs text-mint">
-              <span>{resolution === 'local' ? 'Resolved locally · zero AI tokens' : 'Transcript refined with AI'} — editable draft</span>
-              <span className="font-ledger font-bold">Saving in {countdown}s</span>
+          {mode === 'scan' && !voiceDraftReady && (
+            <div className="flex min-h-64 flex-col items-center justify-center py-6 text-center">
+              {receiptPreview ? <Image unoptimized width={360} height={240} src={receiptPreview} alt="Selected receipt" className="mb-5 max-h-52 w-auto rounded-xl border border-ink-border object-contain" /> : <span className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-sand/10 text-sand"><ImagePlus size={34} /></span>}
+              <p className="font-semibold">{scanning ? 'Reading receipt…' : 'Scan a receipt or screenshot'}</p>
+              <p className="mt-1 max-w-xs text-sm text-paper/45">Images are compressed to 1024px before vision processing.</p>
+              <div className="mt-5 flex gap-2">
+                <label className="flex h-11 cursor-pointer items-center gap-2 rounded-xl bg-mint px-4 text-sm font-bold text-ink"><Camera size={17} /> Camera<input type="file" accept="image/*" capture="environment" disabled={scanning} onChange={(event) => { const file = event.target.files?.[0]; if (file) void scanImage(file); event.target.value = ''; }} className="sr-only" /></label>
+                <label className="flex h-11 cursor-pointer items-center gap-2 rounded-xl border border-ink-border px-4 text-sm font-semibold text-paper/70"><ImagePlus size={17} /> Upload<input type="file" accept="image/*" disabled={scanning} onChange={(event) => { const file = event.target.files?.[0]; if (file) void scanImage(file); event.target.value = ''; }} className="sr-only" /></label>
+              </div>
             </div>
           )}
+
+          {(mode === 'keypad' || voiceDraftReady) && <>
+          {(mode === 'voice' || mode === 'scan') && voiceDraftReady && (
+            <div className="mb-2 flex items-center justify-between rounded-xl border border-mint/25 bg-mint/10 px-3 py-2 text-xs text-mint">
+              <span>{mode === 'scan' ? 'Extracted with vision' : resolution === 'local' ? 'Resolved locally · zero AI tokens' : 'Transcript refined with AI'} — editable draft</span>
+              {numericAmount > 0 && categoryId && <span className="font-ledger font-bold">Saving in {countdown}s</span>}
+            </div>
+          )}
+          {mode === 'scan' && receiptPreview && <Image unoptimized width={360} height={240} src={receiptPreview} alt="Receipt being reviewed" className="mx-auto mb-3 max-h-48 w-auto rounded-xl border border-ink-border object-contain" />}
           <div className="flex min-h-24 items-center justify-center py-3 text-center">
             <span className="mr-1 font-ledger text-2xl text-paper/35">₹</span>
             {mode === 'voice' ? (
@@ -466,6 +547,18 @@ export function CaptureSheet({
               className="h-11 w-full rounded-xl border border-ink-border bg-ink px-3.5 text-sm text-paper placeholder:text-paper/30 focus:border-mint/60 focus:outline-none"
             />
           </label>
+          {mode === 'scan' && (
+            <label className="mt-3 block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-paper/35">Receipt date</span>
+              <input type="date" value={occurredOn} onChange={(event) => { markEdited(); setOccurredOn(event.target.value); }} className="h-11 w-full rounded-xl border border-ink-border bg-ink px-3.5 text-sm text-paper focus:border-mint/60 focus:outline-none" />
+            </label>
+          )}
+          {mode === 'scan' && receiptMeta && receiptMeta.lineItems.length > 0 && (
+            <details className="mt-3 rounded-xl border border-ink-border bg-ink px-3.5 py-3 text-sm">
+              <summary className="cursor-pointer font-semibold text-paper/65">{receiptMeta.lineItems.length} extracted line items</summary>
+              <pre className="mt-2 whitespace-pre-wrap font-sans text-xs text-paper/45">{receiptMeta.lineItems.map((item) => typeof item === 'object' && item ? `${String((item as { name?: unknown }).name ?? 'Item')} · ₹${String((item as { amount?: unknown }).amount ?? '—')}` : String(item)).join('\n')}</pre>
+            </details>
+          )}
 
           <div className="mt-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-paper/35">Category</p>
