@@ -54,6 +54,11 @@ export function LoginForm() {
         required
         autoComplete="current-password"
       />
+      <div className="-mt-2 flex justify-end">
+        <Link href="/forgot-password" className="text-sm font-medium text-mint hover:underline">
+          Forgot password?
+        </Link>
+      </div>
       {error && (
         <div className="rounded-lg bg-clay-soft/10 border border-clay/30 px-3 py-2 text-sm text-clay">
           {error}
